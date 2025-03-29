@@ -89,7 +89,7 @@ PIXI.Assets.load(['earth.png', 'satellite.png', 'gas_station.png']).then((textur
     // --- Create Fuel Station Sprite ---
     fuelStation = new PIXI.Sprite(textures['gas_station.png']);
     fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
-    fuelStation.scale.set(0.08); // Make it even smaller
+    fuelStation.scale.set(0.06); // Make it smaller again
     
     // Position it relative to Earth's center
     const earthRadius = earth.height / 2; // Use height for vertical radius
