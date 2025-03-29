@@ -59,7 +59,10 @@
         }
     </style>
 </head>
-<body data-earth-image-url="{{ url_for('static', filename='images/earth.png') }}">
+<body 
+    data-earth-image-url="{{ url_for('static', filename='images/earth.png') }}"
+    data-station-angle="{{ station_angle|default(0) }}"
+>
     <!-- Status messages -->
     {% if status %}
     <div class="status-message status-{{ status }}">

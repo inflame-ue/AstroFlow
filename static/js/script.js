@@ -96,10 +96,14 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
     fuelStation.scale.set(0.06); // Make it smaller again
     
-    // Position it relative to Earth's center
+    // Position it relative to Earth's center based on angle
+    const stationAngleDegrees = parseFloat(document.body.getAttribute('data-station-angle')) || 0; // Get angle from data attribute, default 0
+    const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180); // Convert degrees to radians, offset so 0 is top
+
     const earthRadius = earth.height / 2; // Use height for vertical radius
-    fuelStation.x = earth.x; // Center horizontally with Earth
-    fuelStation.y = earth.y - earthRadius; // Place bottom anchor at Earth's top edge
+    fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
+    fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
+    fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
     
     app.stage.addChild(fuelStation);
     // --- End Fuel Station Sprite ---
@@ -171,9 +175,13 @@ window.addEventListener('resize', () => {
          satellitesContainer.y = centerY;
     }
     if (fuelStation && fuelStation.parent && earth && earth.parent) { // Ensure earth exists for radius calc
-        // Reposition fuel station relative to the new Earth center
+        // Reposition fuel station relative to the new Earth center based on angle
+        const stationAngleDegrees = parseFloat(document.body.getAttribute('data-station-angle')) || 0; // Get angle again
+        const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180);
         const earthRadius = earth.height / 2; 
-        fuelStation.x = centerX; // Center horizontally
-        fuelStation.y = centerY - earthRadius; // Place at top edge
+        
+        fuelStation.x = centerX + earthRadius * Math.cos(stationAngleRadians);
+        fuelStation.y = centerY + earthRadius * Math.sin(stationAngleRadians); 
+        fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Maintain rotation
     }
 }); 

@@ -37,10 +37,21 @@ def simulation():
     status = request.args.get('status')
     message = request.args.get('message')
     
+    # Extract station angle from form_data (example: first launchpad's primary angle)
+    station_angle = 0 # Default angle
+    try:
+        if form_data and 'launchpads' in form_data and len(form_data['launchpads']) > 0:
+            first_launchpad_key = list(form_data['launchpads'].keys())[0]
+            station_angle = float(form_data['launchpads'][first_launchpad_key].get('angle1', 0))
+    except Exception as e:
+        print(f"Error extracting station angle: {e}")
+        station_angle = 0 # Fallback to default
+        
     return render_template('simulation.html', 
                            form_data=form_data, 
                            status=status, 
-                           message=message)
+                           message=message,
+                           station_angle=station_angle) # Pass angle to template
 
 if __name__ == '__main__':
     app.run(debug=True)
