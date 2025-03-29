@@ -15,13 +15,11 @@ let satellitesContainer; // Container for satellites
 let fuelStation; // Graphics for the fuel station
 const satellites = []; // Array to hold satellite data
 
-// Orbit definitions
-const orbitRadii = [300, 364, 428];
-const angularSpeeds = [0.005, 0.003, 0.002]; // Slower speeds for outer orbits (example values)
-const satelliteDistribution = [3, 3, 4]; // 3 + 3 + 4 = 10 satellites
+// Get the correct URL for the earth.png image
+const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.png';
 
-// Load textures
-PIXI.Assets.load(['earth.png', 'satellite.png', 'gas_station.png']).then((textures) => {
+// Load the Earth PNG texture
+PIXI.Assets.load(earthImageUrl).then((texture) => {
 
     // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container(); // Assign to global scope
