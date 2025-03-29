@@ -1,621 +1,448 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from matplotlib.patches import Circle, PathPatch
-from matplotlib.path import Path
+from matplotlib.animation import FuncAnimation
+from typing import List, Tuple, Dict
 import math
-from typing import List, Tuple, Dict, Optional
-import random
 
-# Constants
-G = 6.67430e-11  # Gravitational constant
-PLANET_MASS = 5.972e24  # Earth mass in kg
-PLANET_RADIUS = 6371  # Earth radius in km
-MAX_FUEL = 1000  # Maximum fuel for the tanker
-FUEL_CONSUMPTION_RATE = 0.2  # Reduced to prevent over-consumption
-REFUEL_THRESHOLD = 20  # Distance threshold for refueling
-COLLECTION_THRESHOLD = 10  # Distance threshold for collecting shuttles
-TIME_STEP = 5.0  # Increased time step for faster simulation
-
-class CelestialObject:
-    def __init__(self, x: float, y: float, vx: float = 0, vy: float = 0):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
+class Planet:
+    def __init__(self, radius: float, GM: float):
+        self.radius = radius  # Planet radius
+        self.GM = GM  # Gravitational parameter
         
-    @property
-    def position(self) -> Tuple[float, float]:
-        return (self.x, self.y)
-    
-    @property
-    def velocity(self) -> Tuple[float, float]:
-        return (self.vx, self.vy)
-    
-    def distance_to(self, other: 'CelestialObject') -> float:
-        return np.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
-    
-    def angle_to(self, other: 'CelestialObject') -> float:
-        return math.atan2(other.y - self.y, other.x - self.x)
-
-class Satellite(CelestialObject):
-    def __init__(self, orbit_radius: float, angle: float, speed: float):
-        # Convert polar to Cartesian coordinates
-        x = orbit_radius * math.cos(angle)
-        y = orbit_radius * math.sin(angle)
-        
-        # Calculate orbital velocity
-        orbital_speed = speed
-        vx = -orbital_speed * math.sin(angle)
-        vy = orbital_speed * math.cos(angle)
-        
-        super().__init__(x, y, vx, vy)
-        self.orbit_radius = orbit_radius
-        self.angle = angle
-        self.speed = speed
-        self.is_refueled = False
-    
-    def update_position(self):
-        # Update angle based on angular velocity
-        angular_velocity = self.speed / self.orbit_radius
-        self.angle += angular_velocity * TIME_STEP
-        
-        # Update Cartesian coordinates
-        self.x = self.orbit_radius * math.cos(self.angle)
-        self.y = self.orbit_radius * math.sin(self.angle)
-        
-        # Update velocity components
-        self.vx = -self.speed * math.sin(self.angle)
-        self.vy = self.speed * math.cos(self.angle)
-
-class RefuelShuttle(CelestialObject):
-    def __init__(self, x: float, y: float, orbit_radius: float, vx: float = 0, vy: float = 0):
-        super().__init__(x, y, vx, vy)
-        self.orbit_radius = orbit_radius
-        self.is_deployed = True
-        self.is_collected = False
-        
-        # Calculate angle in orbit
-        self.angle = math.atan2(y, x)
-        
-        # Calculate orbital velocity
-        orbital_speed = np.sqrt(G * PLANET_MASS / (orbit_radius * 1000))  # Convert km to m
-        self.speed = orbital_speed / 1000  # Convert m/s to km/s
-        
-        # Set velocity components for circular orbit
-        self.vx = -self.speed * math.sin(self.angle)
-        self.vy = self.speed * math.cos(self.angle)
-    
-    def update_position(self):
-        if not self.is_collected:
-            # Update angle based on angular velocity
-            angular_velocity = self.speed / self.orbit_radius
-            self.angle += angular_velocity * TIME_STEP
-            
-            # Update Cartesian coordinates
-            self.x = self.orbit_radius * math.cos(self.angle)
-            self.y = self.orbit_radius * math.sin(self.angle)
-            
-            # Update velocity components
-            self.vx = -self.speed * math.sin(self.angle)
-            self.vy = self.speed * math.cos(self.angle)
-
 class LaunchPad:
-    def __init__(self, angle: float):
-        self.angle = angle
-        self.x = PLANET_RADIUS * math.cos(angle)
-        self.y = PLANET_RADIUS * math.sin(angle)
+    def __init__(self, angle: float, planet: Planet):
+        self.angle = angle  # Angle in radians
+        self.planet = planet
+        self.position = (planet.radius * np.cos(angle), planet.radius * np.sin(angle))
+        
+class Orbit:
+    def __init__(self, radius: float, planet: Planet):
+        self.radius = radius
+        self.planet = planet
+        self.angular_velocity = np.sqrt(planet.GM / (radius**3))  # ω = sqrt(GM/r³)
+        
+class Satellite:
+    def __init__(self, orbit: Orbit, initial_angle: float):
+        self.orbit = orbit
+        self.initial_angle = initial_angle  # Initial position angle in radians
+        self.angle = initial_angle
+        
+    def position_at_time(self, time: float) -> Tuple[float, float]:
+        """Calculate satellite position at given time"""
+        angle = self.initial_angle + self.orbit.angular_velocity * time
+        x = self.orbit.radius * np.cos(angle)
+        y = self.orbit.radius * np.sin(angle)
+        return (x, y)
     
-    @property
-    def position(self) -> Tuple[float, float]:
-        return (self.x, self.y)
+    def update_position(self, time: float):
+        """Update satellite position to time t"""
+        self.angle = self.initial_angle + self.orbit.angular_velocity * time
+        
+class TransferOrbit:
+    def __init__(self, r1: float, r2: float, planet: Planet):
+        """Hohmann transfer orbit from radius r1 to r2"""
+        self.r1 = r1
+        self.r2 = r2
+        self.planet = planet
+        self.semi_major_axis = (r1 + r2) / 2
+        
+        # Calculate delta-v for the transfer
+        v1_circular = np.sqrt(planet.GM / r1)
+        v2_circular = np.sqrt(planet.GM / r2)
+        
+        v1_transfer = np.sqrt(planet.GM * (2/r1 - 1/self.semi_major_axis))
+        v2_transfer = np.sqrt(planet.GM * (2/r2 - 1/self.semi_major_axis))
+        
+        self.delta_v1 = abs(v1_transfer - v1_circular)
+        self.delta_v2 = abs(v2_circular - v2_transfer)
+        self.total_delta_v = self.delta_v1 + self.delta_v2
+        
+        # Calculate transfer time (half an elliptical orbit)
+        self.transfer_time = np.pi * np.sqrt(self.semi_major_axis**3 / planet.GM)
 
-class Tanker(CelestialObject):
-    def __init__(self, launch_pad: LaunchPad):
-        super().__init__(launch_pad.x, launch_pad.y)
-        self.fuel = MAX_FUEL
-        self.shuttles: List[RefuelShuttle] = []
-        self.trajectory: List[Tuple[float, float]] = [(launch_pad.x, launch_pad.y)]
-        self.current_target = None
-        self.is_returning = False
-        self.is_in_orbit = False
-        self.current_orbit_radius = None
-        self.angle = launch_pad.angle
-        self.speed = 0
-        self.waiting = False
-        self.wait_time = 0
+class Mission:
+    def __init__(self, planet: Planet, pads: List[LaunchPad], 
+                 satellites: List[Satellite], transfer_orbit_radius: float):
+        self.planet = planet
+        self.pads = pads
+        self.satellites = satellites
+        self.transfer_orbit_radius = transfer_orbit_radius
+        self.transfer_orbit = Orbit(transfer_orbit_radius, planet)
         
-    def move_to(self, target_x: float, target_y: float):
-        # Simple linear movement towards the target
-        dx = target_x - self.x
-        dy = target_y - self.y
-        distance = np.sqrt(dx**2 + dy**2)
+    def calculate_optimal_launch_time(self, pad: LaunchPad) -> Dict:
+        """
+        Calculate the optimal launch time for a given pad that minimizes mission time
+        Returns a dictionary with mission details
+        """
+        # Launch from surface to transfer orbit
+        surface_to_orbit = TransferOrbit(self.planet.radius, self.transfer_orbit_radius, self.planet)
         
-        if distance > 0:
-            step_size = min(5, distance)  # Increased step size for faster movement
-            self.x += (dx / distance) * step_size
-            self.y += (dy / distance) * step_size
-            self.fuel -= step_size * FUEL_CONSUMPTION_RATE
+        # Initial position of tanker on transfer orbit after launch (aligned with pad angle)
+        initial_tanker_angle = pad.angle
+        
+        # Time to reach transfer orbit
+        launch_time = surface_to_orbit.transfer_time
+        
+        # Track mission events and timeline
+        events = []
+        
+        # Initial position of tanker on transfer orbit
+        tanker_angle = initial_tanker_angle + np.pi  # Arriving on opposite side after half-orbit transfer
+        
+        # For each satellite, calculate optimal departure time for shuttle
+        shuttle_missions = []
+        for sat_idx, satellite in enumerate(self.satellites):
+            # Simulate to find optimal departure time
+            best_departure_time = None
+            best_roundtrip_time = float('inf')
             
-        self.trajectory.append((self.x, self.y))
-    
-    def enter_orbit(self, orbit_radius: float):
-        # Calculate distance from planet center
-        r = np.sqrt(self.x**2 + self.y**2)
-        
-        # If close to desired orbit, adjust to perfect circle
-        if abs(r - orbit_radius) < 20:  # Increased threshold
-            # Calculate current angle
-            current_angle = math.atan2(self.y, self.x)
-            
-            # Set position to exact orbit
-            self.x = orbit_radius * math.cos(current_angle)
-            self.y = orbit_radius * math.sin(current_angle)
-            
-            # Calculate orbital velocity
-            orbital_speed = np.sqrt(G * PLANET_MASS / (orbit_radius * 1000))  # Convert km to m
-            self.speed = orbital_speed / 1000  # Convert m/s to km/s
-            
-            # Set velocity components for circular orbit
-            self.vx = -self.speed * math.sin(current_angle)
-            self.vy = self.speed * math.cos(current_angle)
-            
-            self.current_orbit_radius = orbit_radius
-            self.angle = current_angle
-            self.is_in_orbit = True
-            return True
-        
-        # Otherwise, move toward the orbit
-        target_x = (self.x / r) * orbit_radius
-        target_y = (self.y / r) * orbit_radius
-        self.move_to(target_x, target_y)
-        return False
-    
-    def update_position_in_orbit(self):
-        if self.is_in_orbit and not self.waiting:
-            # Update angle based on angular velocity
-            angular_velocity = self.speed / self.current_orbit_radius
-            self.angle += angular_velocity * TIME_STEP
-            
-            # Update Cartesian coordinates
-            self.x = self.current_orbit_radius * math.cos(self.angle)
-            self.y = self.current_orbit_radius * math.sin(self.angle)
-            
-            # Update velocity components
-            self.vx = -self.speed * math.sin(self.angle)
-            self.vy = self.speed * math.cos(self.angle)
-            
-            self.trajectory.append((self.x, self.y))
-
-    def perform_hohmann_transfer(self, target_orbit: float):
-        if not self.is_in_orbit:
-            return False
-            
-        r1 = self.current_orbit_radius
-        r2 = target_orbit
-        
-        # Calculate delta-v for first burn (departure)
-        v1 = self.speed
-        v_transfer_periapsis = v1 * np.sqrt(2 * r2 / (r1 + r2))
-        delta_v1 = abs(v_transfer_periapsis - v1)
-        
-        # Apply first burn
-        self.speed = v_transfer_periapsis
-        self.vx = -self.speed * math.sin(self.angle)
-        self.vy = self.speed * math.cos(self.angle)
-        
-        # Simulate half-elliptical transfer
-        # Using simplified version for faster simulation
-        transfer_time = np.pi * np.sqrt(((r1 + r2) / 2)**3 / (G * PLANET_MASS / 1e9))
-        steps = max(3, int(transfer_time / TIME_STEP))  # Reduced steps for faster simulation
-        
-        # Simplified transfer (in a real simulation, would solve Kepler's equations)
-        for _ in range(steps):
-            # Update angle - this is a simplification
-            transfer_angular_velocity = self.speed / ((r1 + r2) / 2)
-            self.angle += transfer_angular_velocity * TIME_STEP
-            
-            # Gradually increase radius
-            radius_increment = (r2 - r1) / steps
-            current_radius = self.current_orbit_radius + radius_increment
-            
-            # Update position
-            self.x = current_radius * math.cos(self.angle)
-            self.y = current_radius * math.sin(self.angle)
-            self.trajectory.append((self.x, self.y))
-            
-            self.current_orbit_radius = current_radius
-        
-        # Calculate delta-v for second burn (insertion)
-        v2_orbit = np.sqrt(G * PLANET_MASS / (r2 * 1000)) / 1000
-        v_transfer_apoapsis = v1 * np.sqrt(2 * r1 / (r1 + r2))
-        delta_v2 = abs(v2_orbit - v_transfer_apoapsis)
-        
-        # Apply second burn
-        self.speed = v2_orbit
-        self.vx = -self.speed * math.sin(self.angle)
-        self.vy = self.speed * math.cos(self.angle)
-        
-        # Update position to be exactly on the target orbit
-        self.x = r2 * math.cos(self.angle)
-        self.y = r2 * math.sin(self.angle)
-        self.current_orbit_radius = r2
-        
-        # Consume fuel for both delta-vs
-        total_delta_v = delta_v1 + delta_v2
-        self.fuel -= total_delta_v * FUEL_CONSUMPTION_RATE * 10  # Reduced for better efficiency
-        
-        return True
-    
-    def deploy_shuttle(self):
-        if self.is_in_orbit:
-            shuttle = RefuelShuttle(
-                self.x, self.y, 
-                self.current_orbit_radius,
-                self.vx, self.vy
-            )
-            self.shuttles.append(shuttle)
-            return shuttle
-        return None
-    
-    def wait_in_orbit(self, time: int):
-        self.waiting = True
-        self.wait_time = time
-    
-    def update_wait_time(self):
-        if self.waiting and self.wait_time > 0:
-            self.wait_time -= TIME_STEP
-            if self.wait_time <= 0:
-                self.waiting = False
-                self.wait_time = 0
-
-class SpaceSimulation:
-    def __init__(self):
-        self.planet_radius = PLANET_RADIUS
-        self.launch_pads: List[LaunchPad] = []
-        self.orbits: List[float] = []
-        self.satellites: List[Satellite] = []
-        self.tanker: Optional[Tanker] = None
-        self.best_pad: Optional[LaunchPad] = None
-        self.best_time = float('inf')
-        self.best_trajectory: List[Tuple[float, float]] = []
-        self.simulation_time = 0
-        
-    def add_launch_pad(self, angle: float):
-        self.launch_pads.append(LaunchPad(angle))
-        
-    def add_orbit(self, radius: float):
-        self.orbits.append(radius)
-        
-    def add_satellite(self, orbit_radius: float, angle: float, speed: float):
-        # Verify orbit exists
-        if orbit_radius not in self.orbits:
-            self.add_orbit(orbit_radius)
-        self.satellites.append(Satellite(orbit_radius, angle, speed))
-        
-    def calculate_best_pad(self):
-        best_pad = None
-        best_time = float('inf')
-        best_trajectory = []
-        
-        for pad in self.launch_pads:
-            time, trajectory = self.simulate_mission(pad)
-            if time < best_time:
-                best_time = time
-                best_pad = pad
-                best_trajectory = trajectory
+            # Check different departure times by sweeping through waiting periods
+            for wait_time in np.linspace(0, 2*np.pi/self.transfer_orbit.angular_velocity, 50):
+                departure_time = launch_time + wait_time
                 
-        self.best_pad = best_pad
-        self.best_time = best_time
-        self.best_trajectory = best_trajectory
-        
-        return best_pad, best_time
-    
-    def simulate_mission(self, launch_pad: LaunchPad) -> Tuple[float, List[Tuple[float, float]]]:
-        # Create a tanker at the launch pad
-        tanker = Tanker(launch_pad)
-        
-        # Create a copy of satellites for simulation
-        satellites = [Satellite(sat.orbit_radius, sat.angle, sat.speed) for sat in self.satellites]
-        
-        # Sort orbits by distance
-        sorted_orbits = sorted(self.orbits)
-        
-        time = 0
-        max_time = 300  # Reduced max time
-        
-        # Launch and enter first orbit
-        while not tanker.is_in_orbit and time < max_time:
-            if tanker.enter_orbit(sorted_orbits[0]):
-                tanker.is_in_orbit = True
-            
-            # Update satellite positions
-            for sat in satellites:
-                sat.update_position()
+                # Tanker position at departure
+                tanker_angle_at_departure = initial_tanker_angle + np.pi + self.transfer_orbit.angular_velocity * wait_time
                 
-            time += TIME_STEP
-            
-        # Visit each orbit, deploy shuttles, and refuel satellites
-        for i, orbit_radius in enumerate(sorted_orbits):
-            # If not in the target orbit, perform transfer
-            if tanker.current_orbit_radius != orbit_radius:
-                tanker.perform_hohmann_transfer(orbit_radius)
+                # Satellite position at departure
+                sat_angle_at_departure = satellite.initial_angle + satellite.orbit.angular_velocity * departure_time
                 
-            # Deploy shuttle for satellites in this orbit
-            orbit_satellites = [sat for sat in satellites if sat.orbit_radius == orbit_radius]
-            
-            # Continue orbiting until all satellites in this orbit are refueled
-            while any(not sat.is_refueled for sat in orbit_satellites) and time < max_time:
-                # Deploy a shuttle if we haven't yet
-                if not any(shuttle.orbit_radius == orbit_radius and not shuttle.is_collected 
-                           for shuttle in tanker.shuttles):
-                    shuttle = tanker.deploy_shuttle()
+                # Hohmann transfer from tanker orbit to satellite orbit
+                to_sat_transfer = TransferOrbit(self.transfer_orbit_radius, satellite.orbit.radius, self.planet)
                 
-                # Update positions
-                tanker.update_position_in_orbit()
+                # Time to reach satellite orbit
+                transfer_to_sat_time = to_sat_transfer.transfer_time
                 
-                # Update all shuttles
-                for shuttle in tanker.shuttles:
-                    shuttle.update_position()
+                # Angle traveled by tanker during transfer
+                tanker_angle_change = self.transfer_orbit.angular_velocity * transfer_to_sat_time
                 
-                # Update all satellites
-                for sat in satellites:
-                    sat.update_position()
+                # Angle traveled by satellite during transfer
+                sat_angle_change = satellite.orbit.angular_velocity * transfer_to_sat_time
                 
-                # Check for refueling
-                for shuttle in tanker.shuttles:
-                    if shuttle.orbit_radius == orbit_radius and not shuttle.is_collected:
-                        for sat in orbit_satellites:
-                            if not sat.is_refueled and shuttle.distance_to(sat) < REFUEL_THRESHOLD:
-                                sat.is_refueled = True
+                # Angle difference between tanker and satellite at rendezvous
+                angle_diff = (sat_angle_at_departure + sat_angle_change) - (tanker_angle_at_departure + tanker_angle_change)
+                angle_diff = (angle_diff + np.pi) % (2*np.pi) - np.pi  # Normalize to [-π, π]
                 
-                time += TIME_STEP
-                
-                # Break early if all refueled
-                if all(sat.is_refueled for sat in orbit_satellites):
-                    break
-        
-        # Return to planet
-        tanker.is_returning = True
-        
-        # Collect all shuttles
-        for orbit_radius in reversed(sorted_orbits):
-            # If not in the target orbit, perform transfer
-            if tanker.current_orbit_radius != orbit_radius:
-                tanker.perform_hohmann_transfer(orbit_radius)
-            
-            # Find shuttles in this orbit
-            orbit_shuttles = [s for s in tanker.shuttles if s.orbit_radius == orbit_radius and not s.is_collected]
-            
-            # Collect all shuttles in this orbit
-            while any(not shuttle.is_collected for shuttle in orbit_shuttles) and time < max_time:
-                tanker.update_position_in_orbit()
-                
-                # Update all shuttles
-                for shuttle in tanker.shuttles:
-                    shuttle.update_position()
-                
-                # Check for collection
-                for shuttle in orbit_shuttles:
-                    if tanker.distance_to(shuttle) < COLLECTION_THRESHOLD:
-                        shuttle.is_collected = True
-                
-                time += TIME_STEP
-                
-                # Break early if all collected
-                if all(shuttle.is_collected for shuttle in orbit_shuttles):
-                    break
-        
-        # Return to surface (close to launch pad)
-        while tanker.distance_to(launch_pad) > 10 and time < max_time:
-            tanker.move_to(launch_pad.x, launch_pad.y)
-            time += TIME_STEP
-            
-        # Store the remaining fuel amount for later use
-        self.remaining_fuel = tanker.fuel
-        
-        return time, tanker.trajectory
-    
-    def run_real_simulation(self):
-        if self.best_pad is None:
-            self.calculate_best_pad()
-            
-        # Create the tanker at the best pad
-        self.tanker = Tanker(self.best_pad)
-        
-        # Create the animation
-        fig, ax = plt.subplots(figsize=(10, 10))
-        ax.set_xlim(-self.orbits[-1] * 1.1, self.orbits[-1] * 1.1)
-        ax.set_ylim(-self.orbits[-1] * 1.1, self.orbits[-1] * 1.1)
-        ax.set_aspect('equal')
-        
-        # Draw the planet
-        planet = Circle((0, 0), self.planet_radius, color='blue', alpha=0.7)
-        ax.add_patch(planet)
-        
-        # Draw the orbits
-        for orbit_radius in self.orbits:
-            orbit = Circle((0, 0), orbit_radius, fill=False, color='gray', linestyle='--')
-            ax.add_patch(orbit)
-        
-        # Draw the launch pads
-        pad_markers = []
-        for pad in self.launch_pads:
-            marker, = ax.plot([pad.x], [pad.y], 'ro', markersize=8)
-            pad_markers.append(marker)
-        
-        # Highlight the best pad
-        if self.best_pad:
-            best_pad_marker, = ax.plot([self.best_pad.x], [self.best_pad.y], 'go', markersize=10)
-        
-        # Draw the satellites
-        satellite_markers = []
-        for sat in self.satellites:
-            marker, = ax.plot([sat.x], [sat.y], 'yo', markersize=6, alpha=0.7)
-            satellite_markers.append((sat, marker))
-        
-        # Tanker marker
-        tanker_marker, = ax.plot([self.tanker.x], [self.tanker.y], 'ko', markersize=8)
-        
-        # Shuttle markers (initially empty)
-        shuttle_markers = []
-        
-        # Trajectory line (empty initially)
-        trajectory_line, = ax.plot([], [], 'r-', alpha=0.5, linewidth=1)
-        trajectory_x = []
-        trajectory_y = []
-        
-        def init():
-            trajectory_line.set_data([], [])
-            tanker_marker.set_data([self.tanker.x], [self.tanker.y])
-            for sat, marker in satellite_markers:
-                marker.set_data([sat.x], [sat.y])
-            return [trajectory_line, tanker_marker] + [marker for _, marker in satellite_markers]
-        
-        def animate(i):
-            # Advance simulation time
-            self.simulation_time += TIME_STEP
-            
-            # Simulate tanker movement based on mission logic
-            if not self.tanker.is_in_orbit and self.tanker.current_orbit_radius is None:
-                # Launch and enter first orbit
-                self.tanker.enter_orbit(min(self.orbits))
-            else:
-                # Tanker is in orbit
-                if self.tanker.waiting:
-                    self.tanker.update_wait_time()
-                else:
-                    # Check if we need to move to another orbit
-                    current_orbit_idx = self.orbits.index(self.tanker.current_orbit_radius)
-                    
-                    # If all satellites in current orbit are refueled, move to next orbit
-                    current_orbit_sats = [sat for sat, _ in satellite_markers 
-                                         if sat.orbit_radius == self.tanker.current_orbit_radius]
-                    
-                    if all(sat.is_refueled for sat in current_orbit_sats):
-                        # If there are more orbits, move to the next one
-                        if current_orbit_idx < len(self.orbits) - 1 and not self.tanker.is_returning:
-                            next_orbit = self.orbits[current_orbit_idx + 1]
-                            self.tanker.perform_hohmann_transfer(next_orbit)
-                        elif self.tanker.is_returning and current_orbit_idx > 0:
-                            # Going back down in orbits
-                            prev_orbit = self.orbits[current_orbit_idx - 1]
-                            self.tanker.perform_hohmann_transfer(prev_orbit)
-                        elif self.tanker.is_returning and current_orbit_idx == 0:
-                            # Return to launch pad
-                            if self.tanker.distance_to(self.best_pad) > 10:
-                                self.tanker.move_to(self.best_pad.x, self.best_pad.y)
-                                self.tanker.is_in_orbit = False
+                # Additional waiting for optimal rendezvous
+                if abs(angle_diff) > 0.01:  # If not close enough for rendezvous
+                    # Calculate wait time needed for satellite to reach rendezvous point
+                    if satellite.orbit.angular_velocity > 0:
+                        extra_wait = (2*np.pi - angle_diff) / satellite.orbit.angular_velocity
+                        if extra_wait < 0:
+                            extra_wait += 2*np.pi / satellite.orbit.angular_velocity
                     else:
-                        # We're still working on this orbit
-                        self.tanker.update_position_in_orbit()
-                        
-                        # Check if we should deploy a shuttle
-                        if not any(s.orbit_radius == self.tanker.current_orbit_radius and not s.is_collected 
-                                for s in self.tanker.shuttles):
-                            shuttle = self.tanker.deploy_shuttle()
-                            if shuttle:
-                                marker, = ax.plot([shuttle.x], [shuttle.y], 'go', markersize=5)
-                                shuttle_markers.append((shuttle, marker))
-            
-            # Update satellite positions
-            for sat, marker in satellite_markers:
-                sat.update_position()
-                marker.set_data([sat.x], [sat.y])
+                        extra_wait = angle_diff / abs(satellite.orbit.angular_velocity)
+                    departure_time += extra_wait
+                    tanker_angle_at_departure += self.transfer_orbit.angular_velocity * extra_wait
+                    sat_angle_at_departure += satellite.orbit.angular_velocity * extra_wait
                 
-                # Update satellite color based on refuel status
-                if sat.is_refueled:
-                    marker.set_color('green')
-                else:
-                    marker.set_color('lightgreen')
+                # Refueling operation time (simplified as a constant)
+                refuel_time = 0.5  # Time units
+                
+                # Return transfer
+                from_sat_transfer = TransferOrbit(satellite.orbit.radius, self.transfer_orbit_radius, self.planet)
+                transfer_from_sat_time = from_sat_transfer.transfer_time
+                
+                # Total roundtrip time for this shuttle
+                roundtrip_time = transfer_to_sat_time + refuel_time + transfer_from_sat_time
+                
+                if roundtrip_time < best_roundtrip_time:
+                    best_roundtrip_time = roundtrip_time
+                    best_departure_time = departure_time
             
-            # Update shuttle positions
-            for shuttle, marker in shuttle_markers:
-                if not shuttle.is_collected:
-                    shuttle.update_position()
-                    marker.set_data([shuttle.x], [shuttle.y])
-                else:
-                    marker.set_visible(False)
+            # Record the mission details for this shuttle
+            return_time = best_departure_time + best_roundtrip_time
+            shuttle_missions.append({
+                'satellite_idx': sat_idx,
+                'departure_time': best_departure_time,
+                'return_time': return_time,
+                'roundtrip_time': best_roundtrip_time
+            })
             
-            # Update tanker position
-            tanker_marker.set_data([self.tanker.x], [self.tanker.y])
-            
-            # Check for refueling
-            for shuttle, _ in shuttle_markers:
-                if not shuttle.is_collected:
-                    for sat, _ in satellite_markers:
-                        if not sat.is_refueled and shuttle.orbit_radius == sat.orbit_radius and shuttle.distance_to(sat) < REFUEL_THRESHOLD:
-                            sat.is_refueled = True
-            
-            # Check for shuttle collection
-            if self.tanker.is_returning:
-                for shuttle, marker in shuttle_markers:
-                    if not shuttle.is_collected and self.tanker.distance_to(shuttle) < COLLECTION_THRESHOLD:
-                        shuttle.is_collected = True
-                        marker.set_visible(False)
-            
-            # Check if all satellites are refueled
-            if all(sat.is_refueled for sat, _ in satellite_markers) and not self.tanker.is_returning:
-                self.tanker.is_returning = True
-            
-            # Update trajectory
-            trajectory_x.append(self.tanker.x)
-            trajectory_y.append(self.tanker.y)
-            trajectory_line.set_data(trajectory_x, trajectory_y)
-            
-            return [trajectory_line, tanker_marker] + [marker for _, marker in satellite_markers] + [marker for _, marker in shuttle_markers]
+            events.append(('Shuttle departure to satellite', sat_idx, best_departure_time))
+            events.append(('Shuttle return from satellite', sat_idx, return_time))
         
-        # Set up animation
-        ani = animation.FuncAnimation(
-            fig, animate, init_func=init,
-            frames=200, interval=20, blit=True
+        # Sort mission events chronologically
+        events.sort(key=lambda x: x[2])
+        
+        # Determine when all shuttles have returned
+        mission_end_time = max(mission['return_time'] for mission in shuttle_missions)
+        
+        # Add deorbit time
+        deorbit_transfer = TransferOrbit(self.transfer_orbit_radius, self.planet.radius, self.planet)
+        mission_end_time += deorbit_transfer.transfer_time
+        
+        events.append(('Tanker deorbit start', None, mission_end_time - deorbit_transfer.transfer_time))
+        events.append(('Mission complete', None, mission_end_time))
+        
+        # Calculate total fuel cost (delta-v)
+        total_delta_v = (
+            surface_to_orbit.total_delta_v +  # Launch
+            sum(TransferOrbit(self.transfer_orbit_radius, sat.orbit.radius, self.planet).total_delta_v * 2 
+                for sat in self.satellites) +  # All shuttle round trips
+            deorbit_transfer.total_delta_v  # Return to surface
         )
         
-        plt.title(f"Space Refueling Mission - Best Pad at Angle: {self.best_pad.angle:.2f} radians")
-        plt.grid(True)
+        return {
+            'pad': pad,
+            'launch_time': 0,  # We'll consider this t=0 for each pad scenario
+            'mission_end_time': mission_end_time,
+            'total_mission_time': mission_end_time,
+            'total_delta_v': total_delta_v,
+            'shuttle_missions': shuttle_missions,
+            'events': events
+        }
+    
+    def find_optimal_pad(self) -> Dict:
+        """Find the launch pad that minimizes mission time"""
+        best_mission = None
+        best_time = float('inf')
         
-        # Save the animation as a gif
-        try:
-            ani.save('space_refueling_mission.gif', writer='pillow', fps=30)
-            print("Animation saved as space_refueling_mission.gif")
-        except Exception as e:
-            print(f"Could not save animation: {e}")
+        for pad in self.pads:
+            mission_result = self.calculate_optimal_launch_time(pad)
+            if mission_result['total_mission_time'] < best_time:
+                best_time = mission_result['total_mission_time']
+                best_mission = mission_result
+                
+        return best_mission
+    
+    def visualize_mission(self, mission_result: Dict, save_animation: bool = False):
+        """Visualize the mission with animation"""
+        fig, ax = plt.subplots(figsize=(10, 10))
+        ax.set_aspect('equal')
         
-        plt.show()
+        pad = mission_result['pad']
+        max_radius = max(self.transfer_orbit_radius, max(sat.orbit.radius for sat in self.satellites))
         
+        # Set plot limits with some margin
+        margin = max_radius * 0.2
+        ax.set_xlim(-max_radius-margin, max_radius+margin)
+        ax.set_ylim(-max_radius-margin, max_radius+margin)
+        
+        # Draw planet
+        planet_circle = plt.Circle((0, 0), self.planet.radius, color='blue', alpha=0.7)
+        ax.add_patch(planet_circle)
+        
+        # Mark chosen launch pad
+        ax.plot(pad.position[0], pad.position[1], 'ro', markersize=10)
+        
+        # Draw orbits
+        for satellite in self.satellites:
+            orbit_circle = plt.Circle((0, 0), satellite.orbit.radius, fill=False, color='gray', linestyle='-')
+            ax.add_patch(orbit_circle)
+        
+        # Draw transfer orbit
+        transfer_orbit_circle = plt.Circle((0, 0), self.transfer_orbit_radius, fill=False, color='gray', linestyle='--')
+        ax.add_patch(transfer_orbit_circle)
+        
+        # Initialize objects that will be animated
+        tanker_point, = ax.plot([], [], 'ro', markersize=8, label='Tanker')
+        satellite_points = [ax.plot([], [], 'wo', markersize=6)[0] for _ in self.satellites]
+        shuttle_points = [ax.plot([], [], 'go', markersize=5)[0] for _ in self.satellites]
+        
+        # Extract mission timeline
+        shuttle_missions = mission_result['shuttle_missions']
+        events = mission_result['events']
+        total_mission_time = mission_result['total_mission_time']
+        
+        # Display time and events text
+        time_text = ax.text(0.02, 0.98, '', transform=ax.transAxes, verticalalignment='top')
+        event_text = ax.text(0.02, 0.94, '', transform=ax.transAxes, verticalalignment='top')
+        
+        # Create mission timeline for animation
+        surface_to_orbit = TransferOrbit(self.planet.radius, self.transfer_orbit_radius, self.planet)
+        deorbit_transfer = TransferOrbit(self.transfer_orbit_radius, self.planet.radius, self.planet)
+        
+        def init():
+            tanker_point.set_data([], [])
+            for sat_point in satellite_points:
+                sat_point.set_data([], [])
+            for shuttle_point in shuttle_points:
+                shuttle_point.set_data([], [])
+            time_text.set_text('')
+            event_text.set_text('')
+            return [tanker_point, *satellite_points, *shuttle_points, time_text, event_text]
+        
+        def animate(frame):
+            current_time = frame * total_mission_time / 200  # 200 frames total
+            
+            # Update satellites
+            for i, satellite in enumerate(self.satellites):
+                angle = satellite.initial_angle + satellite.orbit.angular_velocity * current_time
+                x = satellite.orbit.radius * np.cos(angle)
+                y = satellite.orbit.radius * np.sin(angle)
+                satellite_points[i].set_data([x], [y])  # Wrap in list to make it a sequence
+                
+            # Update tanker position
+            if current_time < surface_to_orbit.transfer_time:
+                # During launch
+                progress = current_time / surface_to_orbit.transfer_time
+                start_angle = pad.angle
+                end_angle = start_angle + np.pi  # Arriving on opposite side
+                current_angle = start_angle + progress * np.pi
+                
+                # Interpolate radius from surface to transfer orbit
+                r_current = self.planet.radius + progress * (self.transfer_orbit_radius - self.planet.radius)
+                x = r_current * np.cos(current_angle)
+                y = r_current * np.sin(current_angle)
+                
+            elif current_time < total_mission_time - deorbit_transfer.transfer_time:
+                # On transfer orbit
+                orbit_time = current_time - surface_to_orbit.transfer_time
+                tanker_angle = pad.angle + np.pi + self.transfer_orbit.angular_velocity * orbit_time
+                x = self.transfer_orbit_radius * np.cos(tanker_angle)
+                y = self.transfer_orbit_radius * np.sin(tanker_angle)
+                
+            else:
+                # During deorbit
+                deorbit_time = current_time - (total_mission_time - deorbit_transfer.transfer_time)
+                progress = deorbit_time / deorbit_transfer.transfer_time
+                
+                # Tanker position at start of deorbit
+                deorbit_start_time = total_mission_time - deorbit_transfer.transfer_time
+                orbit_time = deorbit_start_time - surface_to_orbit.transfer_time
+                start_angle = pad.angle + np.pi + self.transfer_orbit.angular_velocity * orbit_time
+                
+                # Find end angle (aimed at original pad)
+                end_angle = pad.angle
+                
+                # Interpolate
+                current_angle = start_angle + progress * (end_angle - start_angle)
+                r_current = self.transfer_orbit_radius - progress * (self.transfer_orbit_radius - self.planet.radius)
+                x = r_current * np.cos(current_angle)
+                y = r_current * np.sin(current_angle)
+                
+            tanker_point.set_data([x], [y])  # Wrap in list to make it a sequence
+            
+            # Update shuttles
+            for i, mission in enumerate(shuttle_missions):
+                departure_time = mission['departure_time']
+                return_time = mission['return_time']
+                
+                if current_time < departure_time or current_time > return_time:
+                    # Shuttle not active or docked with tanker
+                    shuttle_points[i].set_data([], [])
+                    
+                elif current_time < departure_time + surface_to_orbit.transfer_time:
+                    # Shuttle heading to satellite
+                    progress = (current_time - departure_time) / surface_to_orbit.transfer_time
+                    
+                    # Starting position (tanker on transfer orbit)
+                    orbit_time = departure_time - surface_to_orbit.transfer_time
+                    start_angle = pad.angle + np.pi + self.transfer_orbit.angular_velocity * orbit_time
+                    start_x = self.transfer_orbit_radius * np.cos(start_angle)
+                    start_y = self.transfer_orbit_radius * np.sin(start_angle)
+                    
+                    # Target satellite position at arrival
+                    sat_idx = mission['satellite_idx']
+                    target_angle = self.satellites[sat_idx].initial_angle + self.satellites[sat_idx].orbit.angular_velocity * (departure_time + surface_to_orbit.transfer_time)
+                    target_x = self.satellites[sat_idx].orbit.radius * np.cos(target_angle)
+                    target_y = self.satellites[sat_idx].orbit.radius * np.sin(target_angle)
+                    
+                    # Interpolate (simplified - should follow Hohmann arc)
+                    x = start_x + progress * (target_x - start_x)
+                    y = start_y + progress * (target_y - start_y)
+                    shuttle_points[i].set_data([x], [y])  # Wrap in list
+                    
+                elif current_time < return_time - surface_to_orbit.transfer_time:
+                    # Shuttle with satellite (during refueling)
+                    sat_idx = mission['satellite_idx']
+                    angle = self.satellites[sat_idx].initial_angle + self.satellites[sat_idx].orbit.angular_velocity * current_time
+                    x = self.satellites[sat_idx].orbit.radius * np.cos(angle)
+                    y = self.satellites[sat_idx].orbit.radius * np.sin(angle)
+                    shuttle_points[i].set_data([x], [y])  # Wrap in list
+                    
+                else:
+                    # Shuttle returning to tanker
+                    sat_idx = mission['satellite_idx']
+                    return_start_time = return_time - surface_to_orbit.transfer_time
+                    progress = (current_time - return_start_time) / surface_to_orbit.transfer_time
+                    
+                    # Starting position (satellite orbit)
+                    start_angle = self.satellites[sat_idx].initial_angle + self.satellites[sat_idx].orbit.angular_velocity * return_start_time
+                    start_x = self.satellites[sat_idx].orbit.radius * np.cos(start_angle)
+                    start_y = self.satellites[sat_idx].orbit.radius * np.sin(start_angle)
+                    
+                    # Target tanker position at shuttle return
+                    orbit_time = return_time - surface_to_orbit.transfer_time
+                    target_angle = pad.angle + np.pi + self.transfer_orbit.angular_velocity * orbit_time
+                    target_x = self.transfer_orbit_radius * np.cos(target_angle)
+                    target_y = self.transfer_orbit_radius * np.sin(target_angle)
+                    
+                    # Interpolate (simplified)
+                    x = start_x + progress * (target_x - start_x)
+                    y = start_y + progress * (target_y - start_y)
+                    shuttle_points[i].set_data([x], [y])  # Wrap in list
+            
+            # Update time display
+            time_text.set_text(f'Mission Time: {current_time:.2f}')
+            
+            # Update event display
+            current_events = [e for e in events if abs(e[2] - current_time) < total_mission_time/200]
+            if current_events:
+                event_text.set_text('\n'.join([f"{e[0]} {e[1] if e[1] is not None else ''}" for e in current_events]))
+            else:
+                event_text.set_text('')
+            
+            return [tanker_point, *satellite_points, *shuttle_points, time_text, event_text]
+        
+        ani = FuncAnimation(fig, animate, frames=200, init_func=init, blit=True, interval=50)
+        
+        # Add title with mission information
+        plt.title(f"Optimal Launch Pad: {np.degrees(pad.angle):.1f}°, Mission Time: {total_mission_time:.2f}")
+        
+        if save_animation:
+            ani.save('mission_animation.mp4', writer='ffmpeg', fps=30)
+            plt.close()
+        else:
+            plt.tight_layout()
+            plt.show()
+            
         return ani
 
-def run_test():
-    # Create simulation
-    sim = SpaceSimulation()
+def test_algorithm(save_animation=False):
+    # Create a test scenario
+    GM = 100000  # Gravitational parameter (arbitrary units)
+    planet_radius = 100  # Planet radius
+    planet = Planet(planet_radius, GM)
     
-    # Add launch pads at different positions
-    for angle in np.linspace(0, 2*np.pi, 8, endpoint=False):
-        sim.add_launch_pad(angle)
+    # Create several launch pads around the planet
+    pad_angles = np.linspace(0, 2*np.pi, 12, endpoint=False)  # 12 pads evenly spaced
+    pads = [LaunchPad(angle, planet) for angle in pad_angles]
     
-    # Add orbits with reasonable spacing
-    for radius in [10000, 15000, 20000, 25000]:
-        sim.add_orbit(radius)
+    # Create several orbits
+    orbit_radii = [200, 300, 400]
+    orbits = [Orbit(radius, planet) for radius in orbit_radii]
     
-    # Add satellites to different orbits
-    for orbit_radius in sim.orbits:
-        for angle in np.linspace(0, 2*np.pi, 3, endpoint=False):
-            # Calculate appropriate orbital speed for this radius
-            orbital_speed = np.sqrt(G * PLANET_MASS / (orbit_radius * 1000)) / 1000  # Convert to km/s
-            sim.add_satellite(orbit_radius, angle, orbital_speed * 0.8)  # Slightly slower for visibility
+    # Create satellites on different orbits
+    satellites = [
+        Satellite(orbits[0], 0.5),  # First orbit, angle 0.5 rad
+        Satellite(orbits[1], 2.0),  # Second orbit, angle 2.0 rad
+        Satellite(orbits[2], 4.0),  # Third orbit, angle 4.0 rad
+    ]
     
-    # Calculate the best pad
-    best_pad, best_time = sim.calculate_best_pad()
-    print(f"Best launch pad is at angle {best_pad.angle:.2f} radians")
-    print(f"Mission time: {best_time:.2f} time units")
+    # Choose a transfer orbit (somewhat arbitrary for this example)
+    transfer_orbit_radius = np.mean(orbit_radii)
     
-    if hasattr(sim, 'remaining_fuel'):
-        print(f"Fuel used: {MAX_FUEL - sim.remaining_fuel:.2f} units")
-    else:
-        print("Fuel information not available (mission may not have completed)")
+    # Create mission
+    mission = Mission(planet, pads, satellites, transfer_orbit_radius)
     
-    # Run animation
-    sim.run_real_simulation()
+    # Find optimal pad
+    print("Finding optimal launch pad...")
+    optimal_mission = mission.find_optimal_pad()
+    
+    # Print results
+    optimal_pad = optimal_mission['pad']
+    print(f"Optimal launch pad angle: {np.degrees(optimal_pad.angle):.2f} degrees")
+    print(f"Total mission time: {optimal_mission['total_mission_time']:.2f} time units")
+    print(f"Total delta-v: {optimal_mission['total_delta_v']:.2f} velocity units")
+    
+    # Visualize mission
+    print("Visualizing mission...")
+    mission.visualize_mission(optimal_mission, save_animation=save_animation)
+    
+    return mission, optimal_mission
 
 if __name__ == "__main__":
-    run_test()
+    import sys
+    save_animation = "--save" in sys.argv
+    mission, optimal_mission = test_algorithm(save_animation)

@@ -208,7 +208,7 @@ class MissionPlanner:
         
         for pad in self.launch_pads:
             # Calculate fuel needed for this pad to service all satellites
-            fuel_needed = self.calculate_mission_fuel(pad, self.tanker)
+            fuel_needed = self.calculate_mission_fuel(pad)
             
             if fuel_needed < min_total_fuel:
                 min_total_fuel = fuel_needed
@@ -258,6 +258,8 @@ class MissionPlanner:
     def simulate_mission(self, best_pad: LaunchPad) -> None:
         """Simulate a complete mission from the best launch pad"""
         
+        self.tanker.position = best_pad.position
+
         # Sort orbits by radius for sequential visits
         sorted_orbits = sorted(self.orbits, key=lambda o: o.radius)
         
@@ -406,25 +408,21 @@ class MissionPlanner:
                 color='yellow', s=150, zorder=4, label=f'Best Pad (Fuel: {fuel:.1f})'
             )
         
-        # Draw tanker trajectories
-        trajectory = np.array(tanker.trajectory)
-        ax.plot(trajectory[:, 0], trajectory[:, 1], 'r-', linewidth=1.5, label=f'Trajectory {i+1}')
+        # Draw tanker trajectory
+        trajectory = np.array(self.tanker.trajectory)
+        ax.plot(trajectory[:, 0], trajectory[:, 1], 'r-', linewidth=1.5, label='Tanker Trajectory')
             
         ax.set_title('Space Mission Planner - Optimal Refueling Strategy')
         ax.legend(loc='upper right')
         
         if animation:
-            # Initialize tanker point if there are tankers
-            tanker_point = None
-            if self.tankers:
-                tanker = self.tankers[0]  # Animate the first tanker
-                tanker_point = ax.scatter([], [], color='orange', s=100, zorder=5, label='Tanker')
+            # Initialize tanker point
+            tanker_point = ax.scatter([], [], color='orange', s=100, zorder=5, label='Tanker')
             
             def init():
-                if tanker_point:
-                    tanker_point.set_offsets(np.empty((0, 2)))
+                tanker_point.set_offsets(np.empty((0, 2)))
                 satellite_points.set_offsets(np.empty((0, 2)))
-                return (satellite_points,) if not tanker_point else (satellite_points, tanker_point)
+                return satellite_points, tanker_point
             
             def animate(frame):
                 # Update satellite positions
@@ -436,13 +434,13 @@ class MissionPlanner:
                 satellite_points.set_offsets(new_positions)
                 
                 # Update tanker position if applicable
-                if tanker_point and frame < len(self.tankers[0].trajectory):
-                    tanker_point.set_offsets([self.tankers[0].trajectory[frame]])
+                if frame < len(self.tanker.trajectory):
+                    tanker_point.set_offsets([self.tanker.trajectory[frame]])
                 
-                return (satellite_points,) if not tanker_point else (satellite_points, tanker_point)
+                return satellite_points, tanker_point
             
             # Create animation - use longer frames to give more time for satellite movement
-            frames = 200 if not self.tankers else max(200, len(self.tankers[0].trajectory))
+            frames = max(200, len(self.tanker.trajectory))
             anim = FuncAnimation(
                 fig, animate, init_func=init,
                 frames=frames, interval=50, blit=True
@@ -454,11 +452,14 @@ class MissionPlanner:
 
 def run_example():
     
+    # Create tanker starting at the planet surface (we'll update position based on launch pad)
     tanker = RefuelTanker(
+        position=(EARTH_RADIUS, 0),  # Initial position, will be updated to launch pad
         velocity=(0, 0),
         fuel=1000.0,
         dry_mass=500.0
     )
+    
     # Create mission planner with Earth-like planet
     planner = MissionPlanner(planet_radius=EARTH_RADIUS, tanker=tanker)
     
@@ -515,9 +516,12 @@ def run_example():
     best_pad, fuel = planner.calculate_best_launch_pad()
     print(f"Best launch pad angle: {best_pad.angle * 180 / np.pi:.1f}° with fuel: {fuel:.1f}")
     
+    # Update tanker position to the best launch pad position
+    tanker.position = best_pad.position
+    tanker.trajectory = [tanker.position]  # Reset trajectory to start from the pad
 
     # Simulate mission from best pad
-    planner.simulate_mission(best_pad, tanker)
+    planner.simulate_mission(best_pad)
     
     # Visualize results
     planner.visualize(animation=True)
@@ -529,6 +533,14 @@ def test_mission_planner():
     # Test with different planet sizes
     planet_sizes = [EARTH_RADIUS, EARTH_RADIUS/2, EARTH_RADIUS*2]
     for radius in planet_sizes:
+        # Create tanker for this test
+        tanker = RefuelTanker(
+            position=(radius, 0),  # Initial position at planet surface
+            velocity=(0, 0),
+            fuel=1000.0,
+            dry_mass=500.0
+        )
+        
         planner = MissionPlanner(planet_radius=radius, tanker=tanker)
         
         # Add orbits and satellites
@@ -547,26 +559,48 @@ def test_mission_planner():
         print(f"Planet radius: {radius} km - Best pad angle: {best_pad.angle * 180/np.pi:.1f}° - Fuel: {fuel:.1f}")
     
     # Test with different orbit configurations
-    planner = MissionPlanner(planet_radius=EARTH_RADIUS, tanker=tanker)
+    # Create a tanker for evenly spaced orbits test
+    tanker1 = RefuelTanker(
+        position=(EARTH_RADIUS, 0),
+        velocity=(0, 0),
+        fuel=1000.0,
+        dry_mass=500.0
+    )
+    planner = MissionPlanner(planet_radius=EARTH_RADIUS, tanker=tanker1)
     
     # Test 1: Evenly spaced orbits
     orbits1 = [planner.add_orbit(EARTH_RADIUS + r) for r in range(1000, 10001, 3000)]
     for orbit in orbits1:
         planner.add_satellite(orbit, np.random.random() * 2 * np.pi, 0.001)
     
-    # Test 2: Clustered orbits
-    planner = MissionPlanner(planet_radius=EARTH_RADIUS, tanker=tanker)
-    orbits2 = [planner.add_orbit(EARTH_RADIUS + r) for r in [500, 600, 700, 5000]]
-    for orbit in orbits2:
-        planner.add_satellite(orbit, np.random.random() * 2 * np.pi, 0.001)
-    
-    # Add same launch pads to both tests
+    # Add pads to first test
     for i in range(8):
         angle = i * 2 * np.pi / 8
         planner.add_launch_pad(angle)
     
-    best_pad, fuel = planner.calculate_best_launch_pad()
-    print(f"Clustered orbits - Best pad angle: {best_pad.angle * 180/np.pi:.1f}° - Fuel: {fuel:.1f}")
+    best_pad1, fuel1 = planner.calculate_best_launch_pad()
+    print(f"Evenly spaced orbits - Best pad angle: {best_pad1.angle * 180/np.pi:.1f}° - Fuel: {fuel1:.1f}")
+        
+    # Test 2: Clustered orbits
+    # Create a new tanker for clustered orbits test
+    tanker2 = RefuelTanker(
+        position=(EARTH_RADIUS, 0),
+        velocity=(0, 0),
+        fuel=1000.0,
+        dry_mass=500.0
+    )
+    planner = MissionPlanner(planet_radius=EARTH_RADIUS, tanker=tanker2)
+    orbits2 = [planner.add_orbit(EARTH_RADIUS + r) for r in [500, 600, 700, 5000]]
+    for orbit in orbits2:
+        planner.add_satellite(orbit, np.random.random() * 2 * np.pi, 0.001)
+    
+    # Add same launch pads to test 2
+    for i in range(8):
+        angle = i * 2 * np.pi / 8
+        planner.add_launch_pad(angle)
+    
+    best_pad2, fuel2 = planner.calculate_best_launch_pad()
+    print(f"Clustered orbits - Best pad angle: {best_pad2.angle * 180/np.pi:.1f}° - Fuel: {fuel2:.1f}")
     
     print("Tests completed.")
 
