@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")  # Add a secret key for session
+app.secret_key = os.environ.get("SECRET_KEY")  # add a secret key for session with .env
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -18,10 +18,7 @@ def index():
                 return redirect(url_for('simulation'))
             except Exception as e:
                 print("Error processing form data:", e)
-        
         return redirect(url_for('simulation'))
-    
-    # for GET requests, render the form
     return render_template('form.html')
 
 @app.route('/simulation')
