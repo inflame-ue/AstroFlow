@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AstroFlow Configuration</title>
-    <link rel="stylesheet" href="form.css">
-    <script src="form.js" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/form.css') }}">
+    <script src="{{ url_for('static', filename='js/form.js') }}" defer></script>
 </head>
 <body>
     <div class="form-container">
         <div class="container">
             <h1>AstroFlow Configuration</h1>
             
-            <form id="satelliteForm">
+            <form id="satelliteForm" action="/simulation" method="POST">
                 <div class="section">
                     <h2>Launchpads</h2>
                     <div id="launchpadsContainer">

@@ -315,26 +315,56 @@ document.addEventListener('DOMContentLoaded', function () {
           formSummary.style.display = 'block';
 
           console.log('Form Data:', formDataObj);
+          
+          // Visual feedback - hide form and show toggle bar
+          const formContainer = document.querySelector('.form-container');
+          const toggleBar = document.querySelector('.toggle-bar');
+          formContainer.classList.add('hidden');
+          toggleBar.classList.add('visible');
+          
+          // Use fetch to submit the data directly to the server
+          fetch('/', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                  'formData': JSON.stringify(formDataObj)
+              }),
+              redirect: 'follow' // Allow the browser to follow redirects
+          })
+          .then(response => {
+              if (response.redirected) {
+                  // If the server redirected us, follow that redirect
+                  window.location.href = response.url;
+              } else if (response.ok) {
+                  // If we got an OK response but no redirect, go to simulation
+                  window.location.href = '/simulation';
+              } else {
+                  throw new Error(`Form submission failed: ${response.status} ${response.statusText}`);
+              }
+          })
+          .catch(error => {
+              console.error('Error submitting form:', error);
+              alert('An error occurred while submitting the form. Please try again.');
+              
+              // Show form again in case of error
+              formContainer.classList.remove('hidden');
+              toggleBar.classList.remove('visible');
+          });
+          
       } catch (error) {
           console.error("Form submission error:", error);
           alert("An error occurred while processing the form. Please check the console for details.");
+          
+          // Show form again in case of error
+          formContainer.classList.remove('hidden');
+          toggleBar.classList.remove('visible');
       }
   });
 
   const formContainer = document.querySelector('.form-container');
   const toggleBar = document.querySelector('.toggle-bar');
-
-  // Hide form on submit
-  satelliteForm.addEventListener('submit', function(event) {
-      event.preventDefault();
-      
-      // Process form data here
-      updateSummary();
-      
-      // Hide form and show toggle bar
-      formContainer.classList.add('hidden');
-      toggleBar.classList.add('visible');
-  });
 
   // Show form when clicking the toggle bar
   toggleBar.addEventListener('click', function() {
@@ -344,16 +374,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Function to update the summary content
   function updateSummary() {
-      const summaryContent = document.getElementById('summaryContent');
-      
-      // Here you can populate the summary based on form data
-      // For example:
-      // const formData = new FormData(satelliteForm);
-      // let summaryHTML = '<div class="summary-item">';
-      // for (let [key, value] of formData.entries()) {
-      //     summaryHTML += `<p><strong>${key}:</strong> ${value}</p>`;
-      // }
-      // summaryHTML += '</div>';
-      // summaryContent.innerHTML = summaryHTML;
+      // This function is no longer needed as the summary is updated in the submit handler
   }
 });
