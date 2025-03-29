@@ -11,10 +11,13 @@ def normalize_form_data(form_data: dict) -> dict:
 
     """
     for key, value in form_data['orbits'].items():
-        if value['radius'] > 17000:
-            normalized_radius = 17000 + (radius - 17000) * (17000 / 42000)
-            value['radius'] = normalized_radius
-        else:
-            pass
-    
+        try:    
+            if value['radius'] > 17000:
+                if value['radius'] > 42000:
+                    value['radius'] = 42000 # scale down to max radius
+                normalized_radius = 17000 + (value['radius'] - 17000) * (17000 / 42000)
+                value['radius'] = normalized_radius
+        except KeyError as e:
+            print(f"Error while accessing radius: {e}")
+
     return form_data
