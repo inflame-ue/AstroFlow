@@ -21,10 +21,19 @@ const satellites = []; // Array to hold satellite data
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
 
-// Get the correct URL for the earth.png image
-const earthImageUrl = document.body.getAttribute('data-earth-image-url') || 'static/images/earth.svg'; // Use svg
-const satelliteImageUrl = 'static/images/satellite.png'; // Define path
-const gasStationImageUrl = 'static/images/gas_station.svg'; // Define path - Use svg
+// --- Get Combined Simulation Data --- 
+let simData = {}; 
+// ... (try/catch for parsing simData) ...
+console.log("Parsed Simulation Data:", simData);
+
+// --- Image URLs (Construct Absolute Paths) --- 
+const origin = window.location.origin; // e.g., http://127.0.0.1:5000
+let earthImageRelativeUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.svg';
+const earthImageUrl = origin + earthImageRelativeUrl;
+const satelliteImageUrl = origin + '/static/images/satellite.png';
+const gasStationImageUrl = origin + '/static/images/gas_station.svg';
+
+console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl);
 
 // Fetch form data and process it
 fetch('/api/form_data')
