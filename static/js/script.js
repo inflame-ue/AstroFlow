@@ -6,7 +6,6 @@ const app = new PIXI.Application({
     resolution: window.devicePixelRatio || 1,  // Use 4 for 4K resolution
     antialias: true,
     autoDensity: true,
-    
 });
 
 // Add the canvas to the container
@@ -15,8 +14,8 @@ document.getElementById('canvas-container').appendChild(app.view);
 let earth;
 let orbitsContainer;
 let satellitesContainer; // Container for satellites
-let fuelStations = []; // Array for multiple fuel stations
-let orbitRadiiScaled = []; // Array to hold scaled orbit radii
+let fuelStations = []; // Fix: Initialize as empty array
+let orbitRadiiScaled = []; // Fix: Initialize as empty array
 const satellites = []; // Array to hold satellite data
 
 // Scale factor: 97.84 kilometers per pixel
@@ -27,13 +26,34 @@ const earthImageUrl = document.body.getAttribute('data-earth-image-url') || 'sta
 const satelliteImageUrl = 'static/images/satellite.png'; // Define path
 const gasStationImageUrl = 'static/images/gas_station.svg'; // Define path - Use svg
 
-// fetch form data from endpoint
+// Fetch form data and process it
 fetch('/api/form_data')
-    .then((res)=>{ console.log(res.json()) })
+    .then((res) => res.json())
+    .then((formData) => {
+        console.log("FormData", formData);
+        
+        // Process orbit data
+        if (formData && formData.orbits) {
+            // Calculate scaled orbit radii
+            orbitRadiiScaled = Object.values(formData.orbits).map(orbit => {
+                return parseFloat(orbit.radius) * KM_TO_PIXEL_SCALE;
+            });
+        }
+        
+        // Load assets and create visualization after we have the data
+        return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl])
+            .then((textures) => {
+                // Now we have both data and textures, create the visualization
+                createVisualization(formData, textures);
+            });
+    })
+    .catch((error) => {
+        console.error('Error loading data or assets:', error);
+        // Create a fallback
+        createFallbackVisualization();
+    });
 
-
-// Load all textures
-PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((textures) => {
+function createVisualization(formData, textures) {
     // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container();
     app.stage.addChild(orbitsContainer);
@@ -44,7 +64,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     orbitsContainer.y = app.screen.height / 2;
     orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5);
 
-    // Draw orbits based on scaled JSON data
+    // Draw orbits based on scaled radii
     orbitRadiiScaled.forEach(radius => {
         orbitGraphics.drawCircle(0, 0, radius);
     });
@@ -57,29 +77,35 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     satellitesContainer.y = app.screen.height / 2;
 
     // Create satellites based on JSON data
-    Object.values(FormData).forEach((satData, index) => {
-        console.log("satData", satelliteSpeedsParsed[index], orbitRadiiScaled[index], satData);
-        const orbitIndex = parseInt(index) - 1; // Convert to 0-based index
-        const radius = parseFloat(orbitRadiiScaled[index]) * KM_TO_PIXEL_SCALE;
-        const angle = parseFloat(satData) * (Math.PI / 180); // Convert degrees to radians
-        const speed = parseFloat(satelliteSpeedsParsed[index]) * 0.0001; // Scale speed appropriately
+    if (formData && formData.satellites) {
+        Object.entries(formData.satellites).forEach(([satId, satData]) => {
+            const orbitId = satData.orbitId;
+            const orbitData = formData.orbits[orbitId];
+            
+            // Calculate radius and speed from the matching orbit
+            const radius = parseFloat(orbitData.radius) * KM_TO_PIXEL_SCALE;
+            const angle = parseFloat(satData.angle) * (Math.PI / 180); // Convert degrees to radians
+            const speed = parseFloat(orbitData.speed) * 0.0001; // Scale speed appropriately
+            
+            console.log(`Creating satellite ${satId} at angle ${satData.angle}° in orbit ${orbitId} with radius ${radius}px`);
 
-        const satellite = new PIXI.Sprite(textures[satelliteImageUrl]);
-        satellite.anchor.set(0.5);
-        satellite.scale.set(0.07);
+            const satellite = new PIXI.Sprite(textures[satelliteImageUrl]);
+            satellite.anchor.set(0.5);
+            satellite.scale.set(0.07);
 
-        // Initial position
-        satellite.x = radius * Math.cos(angle);
-        satellite.y = radius * Math.sin(angle);
+            // Initial position
+            satellite.x = radius * Math.cos(angle);
+            satellite.y = radius * Math.sin(angle);
 
-        satellitesContainer.addChild(satellite);
-        satellites.push({
-            graphics: satellite,
-            radius: radius,
-            angle: angle,
-            speed: speed
+            satellitesContainer.addChild(satellite);
+            satellites.push({
+                graphics: satellite,
+                radius: radius,
+                angle: angle,
+                speed: speed
+            });
         });
-    });
+    }
     // --- End Satellites ---
 
     // Create Earth sprite using the preloaded texture
@@ -92,43 +118,35 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     // Add Earth last so it's on top of orbits and satellites
     app.stage.addChild(earth);
 
-    // --- Create Fuel Station Sprites (Multiple) ---
-    const stationAnglesJson = document.body.getAttribute('data-station-angles') || '[]'; // Get JSON string
-    let stationAngles = [];
-    try {
-        stationAngles = JSON.parse(stationAnglesJson); // Parse JSON into array
-    } catch (e) {
-        console.error("Error parsing station angles JSON:", e, stationAnglesJson);
-        stationAngles = []; // Default to empty array on error
+    // --- Create Fuel Station Sprites from Launchpads ---
+    if (formData && formData.launchpads) {
+        Object.values(formData.launchpads).forEach(launchpad => {
+            if (launchpad.angle1) {
+                const stationAngleDegrees = parseFloat(launchpad.angle1);
+                
+                const fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]);
+                fuelStation.anchor.set(0.5, 0.55); // Anchor at center
+                fuelStation.scale.set(0.06); // Make it smaller again
+                fuelStation.angleData = stationAngleDegrees; // Store angle on the sprite itself
+                
+                // Position it relative to Earth's center based on angle
+                const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180); // Convert degrees to radians
+                const earthRadius = earth.height / 2; // Use height for vertical radius
+                
+                fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
+                fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
+                fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
+                
+                app.stage.addChild(fuelStation);
+                fuelStations.push(fuelStation); // Add to array
+            }
+        });
     }
-    
-    // Clear previous stations if any (e.g., if re-running init logic)
-    fuelStations.forEach(fs => fs.destroy());
-    fuelStations = [];
-    
-    stationAngles.forEach(stationAngleDegrees => {
-        const fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]);
-        fuelStation.anchor.set(0.5, 0.55); // Anchor at center
-        fuelStation.scale.set(0.06); // Make it smaller again
-        fuelStation.angleData = stationAngleDegrees; // Store angle on the sprite itself
-        
-        // Position it relative to Earth's center based on angle
-        const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180); // Convert degrees to radians, offset so 0 is top
-        const earthRadius = earth.height / 2; // Use height for vertical radius
-        
-        fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
-        fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
-        // Keep rotation pointing outwards if desired, or remove if dot shouldn't rotate
-        fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
-        
-        app.stage.addChild(fuelStation);
-        fuelStations.push(fuelStation); // Add to array
-    });
     // --- End Fuel Station Sprites ---
+}
 
-}).catch((error) => {
-    console.error('Error loading assets:', error);
-    // Create a fallback circle if PNG loading fails
+function createFallbackVisualization() {
+    // Create a fallback circle if loading fails
     const fallbackEarth = new PIXI.Graphics();
     fallbackEarth.beginFill(0x4287f5);
     fallbackEarth.drawCircle(0, 0, 100);
@@ -136,7 +154,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     fallbackEarth.x = app.screen.width / 2;
     fallbackEarth.y = app.screen.height / 2;
     app.stage.addChild(fallbackEarth);
-});
+}
 
 // Create stars
 const stars = [];
@@ -156,16 +174,11 @@ for (let i = 0; i < numStars; i++) {
 }
 
 // Animation loop
-app.ticker.add((delta) => { // Pass delta for potential frame-rate independent movement later
+app.ticker.add((delta) => {
     // Animate Stars
     stars.forEach(star => {
         star.alpha = Math.random();
     });
-
-    // Rotate Earth
-    if (earth && earth.parent) {
-        // earth.rotation += 0.001; // Removed rotation
-    }
 
     // Animate Satellites
     satellites.forEach(sat => {
@@ -175,7 +188,7 @@ app.ticker.add((delta) => { // Pass delta for potential frame-rate independent m
     });
 });
 
-// Handle window resize (adjust orbits, satellites, and ALL fuel stations)
+// Handle window resize
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
     const centerX = app.screen.width / 2;
