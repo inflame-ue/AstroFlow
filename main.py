@@ -5,7 +5,9 @@ import os
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")  # add a secret key for session with .env
+
+# secret key for session
+app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
 
 @app.route('/', methods=['GET', 'POST'])
 def index():

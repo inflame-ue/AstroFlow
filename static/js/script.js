@@ -27,9 +27,15 @@ const earthImageUrl = document.body.getAttribute('data-earth-image-url') || 'sta
 const satelliteImageUrl = 'static/images/satellite.png'; // Define path
 const gasStationImageUrl = 'static/images/gas_station.svg'; // Define path - Use svg
 
+
 // fetch form data from endpoint
 fetch('/api/form_data')
-    .then((res)=>{ console.log(res.json()) })
+    .then(res => res.json())
+    .then(data => {
+        formData = data;
+        console.log("Form Data from Flask:", formData);
+    })
+    .catch(err => console.error("Error fetching form data:", err));
 
 
 // Load all textures
