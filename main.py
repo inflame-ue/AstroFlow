@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import json
 
 app = Flask(__name__)
@@ -16,16 +16,14 @@ def index():
                 print("Received form data:", data)
                 # Store data in session for use in simulation
                 session['form_data'] = data
-                # Add success parameter to redirect
-                return redirect(url_for('simulation', status='success'))
+
+                # Redirect to simulation page
+                return redirect(url_for('simulation'))
             except Exception as e:
                 print("Error processing form data:", e)
-                # Add error parameter to redirect
-                return redirect(url_for('simulation', status='error', message='Could not process form data'))
-        else:
-            # No form data was received
-            print("No form data received")
-            return redirect(url_for('simulation', status='error', message='No form data received'))
+        
+        # Redirect to simulation page
+        return redirect(url_for('simulation'))
     
     # For GET requests, render the form
     return render_template('form.html')
