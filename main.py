@@ -1,570 +1,500 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from typing import List, Dict, Tuple
-import heapq
+from matplotlib.animation import FuncAnimation
+import matplotlib.patches as patches
+import random
+from typing import List, Tuple, Dict
+import math
 
-# Constants
-G = 6.67430e-11  # Gravitational constant (m^3 kg^-1 s^-2)
-M_EARTH = 5.972e24  # Earth mass (kg)
-R_EARTH = 6371000  # Earth radius (m)
-
-@dataclass
-class Satellite:
-    id: int
-    orbit_radius: float  # m
-    anomaly: float  # radians
-    inclination: float  # radians
-    fuel_level: float  # kg
-    fuel_capacity: float  # kg
+class Orbit:
+    def __init__(self, radius: float):
+        self.radius = radius
+        self.satellites = []
     
-    def position(self, time: float = 0) -> np.ndarray:
-        """Calculate position at a given time (assuming circular orbit)"""
-        # Angular velocity based on orbit radius
-        angular_velocity = np.sqrt(G * M_EARTH / (self.orbit_radius ** 3))
-        current_anomaly = (self.anomaly + angular_velocity * time) % (2 * np.pi)
-        
-        # Position in orbital plane
-        x_orbital = self.orbit_radius * np.cos(current_anomaly)
-        y_orbital = self.orbit_radius * np.sin(current_anomaly)
-        
-        # Rotate to account for inclination
-        x = x_orbital
-        y = y_orbital * np.cos(self.inclination)
-        z = y_orbital * np.sin(self.inclination)
-        
-        return np.array([x, y, z])
-
-@dataclass
-class ServiceVehicle:
-    fuel_level: float  # kg
-    fuel_capacity: float  # kg
-    position: np.ndarray  # 3D position vector [x, y, z]
-    velocity: np.ndarray  # 3D velocity vector [vx, vy, vz]
-    
-    def calculate_delta_v(self, target_satellite: Satellite, time: float = 0) -> float:
-        """Simplified delta-V calculation for orbit transfer"""
-        # In a real implementation, this would use the Lambert problem solver
-        # or another orbital mechanics calculation
-        
-        # For this demo, we'll use a simplified model based on orbit radius difference
-        r1 = np.linalg.norm(self.position)
-        r2 = target_satellite.orbit_radius
-        
-        # Hohmann transfer approximation
-        delta_v1 = np.sqrt(G * M_EARTH / r1) * (np.sqrt(2 * r2 / (r1 + r2)) - 1)
-        delta_v2 = np.sqrt(G * M_EARTH / r2) * (1 - np.sqrt(2 * r1 / (r1 + r2)))
-        
-        return abs(delta_v1) + abs(delta_v2)
-    
-    def fuel_required(self, delta_v: float) -> float:
-        """Calculate fuel required for a given delta-V using the rocket equation"""
-        # Simplified: assuming constant exhaust velocity of 3000 m/s
-        exhaust_velocity = 3000.0  # m/s
-        initial_mass = 1000.0 + self.fuel_level  # kg (dry mass + fuel)
-        
-        final_mass = initial_mass * np.exp(-delta_v / exhaust_velocity)
-        return initial_mass - final_mass
-    
-    def can_reach_and_return(self, satellite: Satellite, depot_position: np.ndarray) -> bool:
-        """Check if vehicle can reach satellite and return to depot with current fuel"""
-        delta_v_to_satellite = self.calculate_delta_v(satellite)
-        
-        # Create a temporary satellite object at depot position for delta-V calculation
-        depot_sat = Satellite(
-            id=-1, 
-            orbit_radius=np.linalg.norm(depot_position),
-            anomaly=np.arctan2(depot_position[1], depot_position[0]),
-            inclination=np.arcsin(depot_position[2] / np.linalg.norm(depot_position)) if np.linalg.norm(depot_position) > 0 else 0,
-            fuel_level=0, 
-            fuel_capacity=0
-        )
-        
-        # Calculate return delta-V from a position at the satellite's location
-        temp_vehicle = ServiceVehicle(
-            fuel_level=self.fuel_level,
-            fuel_capacity=self.fuel_capacity,
-            position=satellite.position(),
-            velocity=np.zeros(3)
-        )
-        delta_v_return = temp_vehicle.calculate_delta_v(depot_sat)
-        
-        # Calculate total fuel required
-        total_fuel_required = self.fuel_required(delta_v_to_satellite) + self.fuel_required(delta_v_return)
-        
-        # Add 20% margin for safety
-        return total_fuel_required * 1.2 < self.fuel_level
-
-# Define all functions first before using them
-def cluster_satellites(satellites: List[Satellite], epsilon: float = 5e5) -> Dict[int, List[Satellite]]:
-    """Group satellites by orbits that are close to each other"""
-    clusters = {}
-    cluster_id = 0
-    
-    # Simplified clustering based on orbit radius and inclination
-    for sat in satellites:
-        assigned = False
-        for cid, members in clusters.items():
-            if (abs(members[0].orbit_radius - sat.orbit_radius) < epsilon and
-                abs(members[0].inclination - sat.inclination) < 0.1):
-                clusters[cid].append(sat)
-                assigned = True
-                break
-        
-        if not assigned:
-            clusters[cluster_id] = [sat]
-            cluster_id += 1
-    
-    return clusters
-
-def find_optimal_sequence(service_vehicle: ServiceVehicle, 
-                         satellites: List[Satellite],
-                         depot_position: np.ndarray) -> List[Satellite]:
-    """
-    Find optimal refueling sequence using a greedy algorithm
-    with consideration for orbital mechanics and fuel constraints
-    """
-    remaining_satellites = satellites.copy()
-    refueling_sequence = []
-    
-    # Start from depot
-    current_position = depot_position.copy()
-    
-    # Create temporary vehicle for planning
-    planning_vehicle = ServiceVehicle(
-        fuel_level=service_vehicle.fuel_level,
-        fuel_capacity=service_vehicle.fuel_capacity,
-        position=current_position,
-        velocity=np.zeros(3)
-    )
-    
-    while remaining_satellites:
-        # Find the next best satellite to visit
-        best_satellite = None
-        best_value = float('-inf')  # Initialize with negative infinity
-        
-        for satellite in remaining_satellites:
-            # Skip if we can't reach this satellite and return to depot
-            if not planning_vehicle.can_reach_and_return(satellite, depot_position):
-                continue
-                
-            # Calculate delta-V to reach this satellite
-            delta_v = planning_vehicle.calculate_delta_v(satellite)
-            fuel_needed = planning_vehicle.fuel_required(delta_v)
-            
-            # Skip if we don't have enough fuel
-            if fuel_needed >= planning_vehicle.fuel_level:
-                continue
-                
-            # Value metric: prioritize satellites that need refueling more
-            # and require less fuel to reach
-            fuel_need_percentage = 1 - (satellite.fuel_level / satellite.fuel_capacity)
-            value = fuel_need_percentage / (fuel_needed + 1)  # +1 to avoid division by zero
-            
-            if value > best_value:
-                best_value = value
-                best_satellite = satellite
-        
-        # If no viable satellite found, break
-        if best_satellite is None:
-            break
-            
-        # Add best satellite to sequence
-        refueling_sequence.append(best_satellite)
-        remaining_satellites.remove(best_satellite)
-        
-        # Update vehicle state (position and remaining fuel)
-        delta_v = planning_vehicle.calculate_delta_v(best_satellite)
-        fuel_used = planning_vehicle.fuel_required(delta_v)
-        planning_vehicle.fuel_level -= fuel_used
-        planning_vehicle.position = best_satellite.position()
-        
-        # Account for refueling operation (time spent and small amount of fuel)
-        planning_vehicle.fuel_level -= 5  # Simplified: 5kg of fuel used during refueling operation
-    
-    return refueling_sequence
-
-def optimize_multi_cluster_mission(service_vehicle: ServiceVehicle,
-                                  satellites: List[Satellite],
-                                  depot_position: np.ndarray) -> List[Satellite]:
-    """
-    Optimize mission across multiple clusters of satellites
-    """
-    # Cluster satellites by orbit
-    clusters = cluster_satellites(satellites)
-    
-    # For each cluster, calculate value metric (satellites serviced / fuel used)
-    cluster_values = []
-    
-    for cluster_id, cluster_satellites in clusters.items():
-        # Create a temporary vehicle for planning
-        planning_vehicle = ServiceVehicle(
-            fuel_level=service_vehicle.fuel_level,
-            fuel_capacity=service_vehicle.fuel_capacity,
-            position=depot_position.copy(),
-            velocity=np.zeros(3)
-        )
-        
-        # Find optimal sequence within this cluster
-        sequence = find_optimal_sequence(planning_vehicle, cluster_satellites, depot_position)
-        
-        # Skip if no satellites can be serviced in this cluster
-        if not sequence:
-            continue
-            
-        # Calculate total delta-V and fuel required for this cluster
-        total_delta_v = 0
-        total_fuel = 0
-        
-        # First, calculate delta-V to reach first satellite in sequence
-        first_sat = sequence[0]
-        delta_v = planning_vehicle.calculate_delta_v(first_sat)
-        fuel = planning_vehicle.fuel_required(delta_v)
-        total_delta_v += delta_v
-        total_fuel += fuel
-        
-        # Calculate delta-V between satellites in sequence
-        current_pos = first_sat.position()
-        for i in range(1, len(sequence)):
-            # Create temporary vehicle at current position
-            temp_vehicle = ServiceVehicle(
-                fuel_level=planning_vehicle.fuel_level - total_fuel,
-                fuel_capacity=planning_vehicle.fuel_capacity,
-                position=current_pos,
-                velocity=np.zeros(3)
-            )
-            
-            next_sat = sequence[i]
-            delta_v = temp_vehicle.calculate_delta_v(next_sat)
-            fuel = temp_vehicle.fuel_required(delta_v)
-            total_delta_v += delta_v
-            total_fuel += fuel
-            current_pos = next_sat.position()
-        
-        # Calculate delta-V to return to depot
-        temp_vehicle = ServiceVehicle(
-            fuel_level=planning_vehicle.fuel_level - total_fuel,
-            fuel_capacity=planning_vehicle.fuel_capacity,
-            position=current_pos,
-            velocity=np.zeros(3)
-        )
-        
-        # Create a temporary satellite object at depot position for delta-V calculation
-        depot_sat = Satellite(
-            id=-1, 
-            orbit_radius=np.linalg.norm(depot_position),
-            anomaly=np.arctan2(depot_position[1], depot_position[0]),
-            inclination=np.arcsin(depot_position[2] / np.linalg.norm(depot_position)) if np.linalg.norm(depot_position) > 0 else 0,
-            fuel_level=0, 
-            fuel_capacity=0
-        )
-        
-        return_delta_v = temp_vehicle.calculate_delta_v(depot_sat)
-        return_fuel = temp_vehicle.fuel_required(return_delta_v)
-        total_delta_v += return_delta_v
-        total_fuel += return_fuel
-        
-        # Calculate value: satellites serviced per unit of fuel
-        value = len(sequence) / total_fuel if total_fuel > 0 else 0
-        
-        # Add to priority queue (negative value for max-heap behavior)
-        heapq.heappush(cluster_values, (-value, cluster_id, sequence, total_fuel))
-    
-    # Greedy algorithm: service highest value clusters first until fuel runs out
-    final_sequence = []
-    remaining_fuel = service_vehicle.fuel_level
-    
-    while cluster_values and remaining_fuel > 0:
-        _, cluster_id, sequence, fuel_required = heapq.heappop(cluster_values)
-        
-        # Skip if not enough fuel
-        if fuel_required > remaining_fuel:
-            continue
-            
-        # Add this cluster's sequence to final sequence
-        final_sequence.extend(sequence)
-        remaining_fuel -= fuel_required
-    
-    return final_sequence
-
-def visualize_mission(satellites: List[Satellite], 
-                     sequence: List[Satellite], 
-                     depot_position: np.ndarray):
-    """Visualize the mission plan"""
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Plot Earth
-    u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
-    x = R_EARTH * np.cos(u) * np.sin(v)
-    y = R_EARTH * np.sin(u) * np.sin(v)
-    z = R_EARTH * np.cos(v)
-    ax.plot_surface(x, y, z, color='blue', alpha=0.1)
-    
-    # Plot all satellite orbits
-    for sat in satellites:
-        theta = np.linspace(0, 2*np.pi, 100)
-        x_orbit = sat.orbit_radius * np.cos(theta)
-        y_orbit = sat.orbit_radius * np.sin(theta) * np.cos(sat.inclination)
-        z_orbit = sat.orbit_radius * np.sin(theta) * np.sin(sat.inclination)
-        ax.plot(x_orbit, y_orbit, z_orbit, 'gray', alpha=0.3)
-    
-    # Plot all satellites
-    for sat in satellites:
-        pos = sat.position()
-        if sat in sequence:
-            ax.scatter(pos[0], pos[1], pos[2], color='green', s=50)
-        else:
-            ax.scatter(pos[0], pos[1], pos[2], color='red', s=30)
-    
-    # Plot depot
-    ax.scatter(depot_position[0], depot_position[1], depot_position[2], 
-               color='blue', s=100, marker='*')
-    
-    # Plot mission path
-    path_x, path_y, path_z = [depot_position[0]], [depot_position[1]], [depot_position[2]]
-    for sat in sequence:
-        pos = sat.position()
-        path_x.append(pos[0])
-        path_y.append(pos[1])
-        path_z.append(pos[2])
-    path_x.append(depot_position[0])
-    path_y.append(depot_position[1])
-    path_z.append(depot_position[2])
-    
-    ax.plot(path_x, path_y, path_z, 'k-', linewidth=2)
-    
-    # Annotate satellites in sequence
-    for i, sat in enumerate(sequence):
-        pos = sat.position()
-        ax.text(pos[0], pos[1], pos[2], f"{i+1}", fontsize=12)
-    
-    # Set equal aspect ratio
-    max_range = max([
-        max(path_x) - min(path_x),
-        max(path_y) - min(path_y),
-        max(path_z) - min(path_z)
-    ])
-    
-    mid_x = (max(path_x) + min(path_x)) / 2
-    mid_y = (max(path_y) + min(path_y)) / 2
-    mid_z = (max(path_z) + min(path_z)) / 2
-    
-    ax.set_xlim(mid_x - max_range/2, mid_x + max_range/2)
-    ax.set_ylim(mid_y - max_range/2, mid_y + max_range/2)
-    ax.set_zlim(mid_z - max_range/2, mid_z + max_range/2)
-    
-    ax.set_xlabel('X (m)')
-    ax.set_ylabel('Y (m)')
-    ax.set_zlabel('Z (m)')
-    ax.set_title('Satellite Refueling Mission Plan')
-    
-    plt.tight_layout()
-    plt.savefig('mission_visualization.png')
-    plt.show()
-
-def simulate_mission(service_vehicle: ServiceVehicle,
-                    sequence: List[Satellite],
-                    depot_position: np.ndarray) -> Dict:
-    """
-    Simulate the mission and return performance metrics
-    """
-    # Deep copy to avoid modifying originals
-    vehicle = ServiceVehicle(
-        fuel_level=service_vehicle.fuel_level,
-        fuel_capacity=service_vehicle.fuel_capacity,
-        position=depot_position.copy(),
-        velocity=np.zeros(3)
-    )
-    
-    metrics = {
-        "satellites_serviced": 0,
-        "total_delta_v": 0,
-        "total_fuel_used": 0,
-        "mission_success": True
-    }
-    
-    current_position = depot_position.copy()
-    
-    # Process each satellite in sequence
-    for sat in sequence:
-        # Create temporary vehicle for delta-V calculation
-        temp_vehicle = ServiceVehicle(
-            fuel_level=vehicle.fuel_level,
-            fuel_capacity=vehicle.fuel_capacity,
-            position=current_position,
-            velocity=np.zeros(3)
-        )
-        
-        # Calculate delta-V to reach satellite
-        delta_v = temp_vehicle.calculate_delta_v(sat)
-        fuel_needed = temp_vehicle.fuel_required(delta_v)
-        
-        # Check if we have enough fuel
-        if fuel_needed > vehicle.fuel_level:
-            metrics["mission_success"] = False
-            break
-            
-        # Update metrics
-        metrics["total_delta_v"] += delta_v
-        metrics["total_fuel_used"] += fuel_needed
-        vehicle.fuel_level -= fuel_needed
-        
-        # Refuel satellite
-        refuel_amount = sat.fuel_capacity - sat.fuel_level
-        refuel_amount = min(refuel_amount, 50)  # Assuming 50kg max transfer
-        
-        # Small fuel cost for refueling operation
-        vehicle.fuel_level -= 5  # Simplified: 5kg of fuel used during refueling
-        
-        # Update position and metrics
-        current_position = sat.position()
-        metrics["satellites_serviced"] += 1
-    
-    # Calculate return to depot
-    temp_vehicle = ServiceVehicle(
-        fuel_level=vehicle.fuel_level,
-        fuel_capacity=vehicle.fuel_capacity,
-        position=current_position,
-        velocity=np.zeros(3)
-    )
-    
-    # Create a temporary satellite at depot for delta-V calculation
-    depot_sat = Satellite(
-        id=-1, 
-        orbit_radius=np.linalg.norm(depot_position),
-        anomaly=np.arctan2(depot_position[1], depot_position[0]),
-        inclination=np.arcsin(depot_position[2] / np.linalg.norm(depot_position)) if np.linalg.norm(depot_position) > 0 else 0,
-        fuel_level=0, 
-        fuel_capacity=0
-    )
-    
-    return_delta_v = temp_vehicle.calculate_delta_v(depot_sat)
-    return_fuel = temp_vehicle.fuel_required(return_delta_v)
-    
-    if return_fuel > vehicle.fuel_level:
-        metrics["mission_success"] = False
-    else:
-        metrics["total_delta_v"] += return_delta_v
-        metrics["total_fuel_used"] += return_fuel
-        vehicle.fuel_level -= return_fuel
-    
-    metrics["remaining_fuel"] = vehicle.fuel_level
-    metrics["fuel_efficiency"] = metrics["satellites_serviced"] / metrics["total_fuel_used"] if metrics["total_fuel_used"] > 0 else 0
-    
-    return metrics
-
-def test_algorithm():
-    """Test the algorithm with various scenarios"""
-    results = []
-    
-    # Test scenarios with different orbit configurations
-    test_cases = [
-        {
-            "name": "Single orbit cluster",
-            "satellites": [
-                Satellite(id=1, orbit_radius=7e6, anomaly=0, inclination=0, fuel_level=10, fuel_capacity=100),
-                Satellite(id=2, orbit_radius=7e6, anomaly=np.pi/4, inclination=0, fuel_level=20, fuel_capacity=100),
-                Satellite(id=3, orbit_radius=7e6, anomaly=np.pi/2, inclination=0, fuel_level=30, fuel_capacity=100),
-                Satellite(id=4, orbit_radius=7e6, anomaly=3*np.pi/4, inclination=0, fuel_level=15, fuel_capacity=100),
-                Satellite(id=5, orbit_radius=7e6, anomaly=np.pi, inclination=0, fuel_level=25, fuel_capacity=100),
-            ],
-            "service_vehicle": ServiceVehicle(
-                fuel_level=2000,
-                fuel_capacity=2000,
-                position=np.array([7e6, 0, 0]),
-                velocity=np.zeros(3)
-            ),
-            "depot_position": np.array([7e6, 0, 0])
-        },
-        {
-            "name": "Two orbit clusters",
-            "satellites": [
-                # Cluster 1 (7000 km altitude)
-                Satellite(id=1, orbit_radius=7e6 + R_EARTH, anomaly=0, inclination=0, fuel_level=10, fuel_capacity=100),
-                Satellite(id=2, orbit_radius=7e6 + R_EARTH, anomaly=np.pi/4, inclination=0, fuel_level=20, fuel_capacity=100),
-                Satellite(id=3, orbit_radius=7e6 + R_EARTH, anomaly=np.pi/2, inclination=0, fuel_level=30, fuel_capacity=100),
-                # Cluster 2 (10000 km altitude)
-                Satellite(id=4, orbit_radius=10e6 + R_EARTH, anomaly=0, inclination=np.pi/6, fuel_level=15, fuel_capacity=100),
-                Satellite(id=5, orbit_radius=10e6 + R_EARTH, anomaly=np.pi/2, inclination=np.pi/6, fuel_level=25, fuel_capacity=100),
-            ],
-            "service_vehicle": ServiceVehicle(
-                fuel_level=2000,
-                fuel_capacity=2000,
-                position=np.array([7e6 + R_EARTH, 0, 0]),
-                velocity=np.zeros(3)
-            ),
-            "depot_position": np.array([7e6 + R_EARTH, 0, 0])
-        },
-        {
-            "name": "Three orbit clusters with low fuel",
-            "satellites": [
-                # Cluster 1 (LEO)
-                Satellite(id=1, orbit_radius=7e6 + R_EARTH, anomaly=0, inclination=0, fuel_level=10, fuel_capacity=100),
-                Satellite(id=2, orbit_radius=7e6 + R_EARTH, anomaly=np.pi/3, inclination=0, fuel_level=20, fuel_capacity=100),
-                # Cluster 2 (MEO)
-                Satellite(id=3, orbit_radius=20e6 + R_EARTH, anomaly=0, inclination=np.pi/4, fuel_level=30, fuel_capacity=100),
-                Satellite(id=4, orbit_radius=20e6 + R_EARTH, anomaly=np.pi/2, inclination=np.pi/4, fuel_level=15, fuel_capacity=100),
-                # Cluster 3 (GEO)
-                Satellite(id=5, orbit_radius=36e6 + R_EARTH, anomaly=0, inclination=0, fuel_level=5, fuel_capacity=100),
-            ],
-            "service_vehicle": ServiceVehicle(
-                fuel_level=1000,  # Limited fuel
-                fuel_capacity=1000,
-                position=np.array([7e6 + R_EARTH, 0, 0]),
-                velocity=np.zeros(3)
-            ),
-            "depot_position": np.array([7e6 + R_EARTH, 0, 0])
-        }
-    ]
-    
-    for i, test_case in enumerate(test_cases):
-        print(f"\nTest Case {i+1}: {test_case['name']}")
-        
-        # Plan mission
-        sequence = optimize_multi_cluster_mission(
-            test_case["service_vehicle"],
-            test_case["satellites"],
-            test_case["depot_position"]
-        )
-        
-        # Simulate mission
-        metrics = simulate_mission(
-            test_case["service_vehicle"],
-            sequence,
-            test_case["depot_position"]
-        )
-        
-        # Print results
-        print(f"Satellites serviced: {metrics['satellites_serviced']} / {len(test_case['satellites'])}")
-        print(f"Total delta-V: {metrics['total_delta_v']:.2f} m/s")
-        print(f"Total fuel used: {metrics['total_fuel_used']:.2f} kg")
-        print(f"Remaining fuel: {metrics['remaining_fuel']:.2f} kg")
-        print(f"Fuel efficiency: {metrics['fuel_efficiency']:.4f} satellites/kg")
-        print(f"Mission success: {metrics['mission_success']}")
-        
-        # Visualize mission
-        visualize_mission(test_case["satellites"], sequence, test_case["depot_position"])
-        
-        # Store results
-        results.append({
-            "test_case": test_case["name"],
-            "satellites_total": len(test_case["satellites"]),
-            "metrics": metrics,
-            "sequence": [sat.id for sat in sequence]
+    def add_satellite(self, angle: float, speed: float):
+        """Add a satellite to this orbit with initial angle and speed."""
+        self.satellites.append({
+            'angle': angle,  # radians
+            'speed': speed,  # radians per time unit
+            'last_refuel_time': 0
         })
     
-    return results
+    def update_satellites(self, time_step: float):
+        """Update positions of all satellites in this orbit."""
+        for sat in self.satellites:
+            sat['angle'] = (sat['angle'] + sat['speed'] * time_step) % (2 * np.pi)
+
+class LaunchPad:
+    def __init__(self, radius: float, angle: float):
+        self.radius = radius  # Distance from planet center
+        self.angle = angle    # Position angle in radians
+        self.x = radius * np.cos(angle)
+        self.y = radius * np.sin(angle)
+    
+    def get_position(self):
+        return (self.x, self.y)
+
+class RefuelMission:
+    def __init__(self, launch_pad: LaunchPad, orbits: List[Orbit], max_time: float = 1000.0):
+        self.launch_pad = launch_pad
+        self.orbits = orbits
+        self.max_time = max_time
+        
+        # Mission parameters
+        self.ascent_speed = 0.5  # Units per time step
+        self.descent_speed = 0.7  # Units per time step
+        self.orbital_transfer_speed = 0.4  # Units per time step
+        
+        # For tracking and visualization
+        self.best_time = float('inf')
+        self.best_schedule = []
+        self.best_trajectory = []
+    
+    def calculate_transfer_time(self, orbit1_radius: float, angle1: float, 
+                                orbit2_radius: float, angle2: float):
+        """Calculate time to transfer between two orbital positions."""
+        # Simplified orbital transfer - direct path
+        dx = orbit2_radius * np.cos(angle2) - orbit1_radius * np.cos(angle1)
+        dy = orbit2_radius * np.sin(angle2) - orbit1_radius * np.sin(angle1)
+        distance = np.sqrt(dx**2 + dy**2)
+        return distance / self.orbital_transfer_speed
+    
+    def calculate_ascent_time(self, target_orbit: Orbit, target_angle: float):
+        """Calculate time to ascend from launch pad to target orbit at target angle."""
+        pad_x, pad_y = self.launch_pad.get_position()
+        target_x = target_orbit.radius * np.cos(target_angle)
+        target_y = target_orbit.radius * np.sin(target_angle)
+        
+        distance = np.sqrt((target_x - pad_x)**2 + (target_y - pad_y)**2)
+        return distance / self.ascent_speed
+    
+    def calculate_descent_time(self, orbit_radius: float, angle: float):
+        """Calculate time to descend from orbit back to launch pad."""
+        pad_x, pad_y = self.launch_pad.get_position()
+        orbit_x = orbit_radius * np.cos(angle)
+        orbit_y = orbit_radius * np.sin(angle)
+        
+        distance = np.sqrt((orbit_x - pad_x)**2 + (orbit_y - pad_y)**2)
+        return distance / self.descent_speed
+    
+    def find_optimal_refuel_sequence(self):
+        """Find the optimal sequence to refuel all satellites with minimum time."""
+        # Starting at the pad
+        current_location = ("pad", 0, self.launch_pad.angle)
+        current_time = 0
+        path = [current_location]
+        trajectory = [(self.launch_pad.x, self.launch_pad.y, current_time)]
+        
+        # Copy satellites to track which ones we've refueled
+        satellites_to_refuel = []
+        for i, orbit in enumerate(self.orbits):
+            for j, sat in enumerate(orbit.satellites):
+                satellites_to_refuel.append({
+                    'orbit_idx': i,
+                    'sat_idx': j,
+                    'refueled': False
+                })
+        
+        # Continue until all satellites are refueled
+        while any(not sat['refueled'] for sat in satellites_to_refuel):
+            best_sat = None
+            best_wait_time = 0
+            best_total_time = float('inf')
+            best_intercept_angle = 0
+            
+            for sat_info in satellites_to_refuel:
+                if sat_info['refueled']:
+                    continue
+                    
+                orbit_idx = sat_info['orbit_idx']
+                sat_idx = sat_info['sat_idx']
+                orbit = self.orbits[orbit_idx]
+                satellite = orbit.satellites[sat_idx]
+                
+                # Try different wait times to find optimal interception
+                for wait_time in np.linspace(0, 20, 40):  # Try various wait times
+                    intercept_time = current_time + wait_time
+                    # Calculate satellite position at intercept time
+                    intercept_angle = (satellite['angle'] + satellite['speed'] * wait_time) % (2 * np.pi)
+                    
+                    transfer_time = 0
+                    if current_location[0] == "pad":
+                        # From pad to orbit
+                        transfer_time = self.calculate_ascent_time(orbit, intercept_angle)
+                    else:
+                        # From one orbit to another
+                        prev_orbit_radius = self.orbits[current_location[1]].radius
+                        prev_angle = current_location[2]
+                        transfer_time = self.calculate_transfer_time(
+                            prev_orbit_radius, prev_angle,
+                            orbit.radius, intercept_angle
+                        )
+                    
+                    total_time = wait_time + transfer_time
+                    if total_time < best_total_time:
+                        best_sat = sat_info
+                        best_wait_time = wait_time
+                        best_total_time = total_time
+                        best_intercept_angle = intercept_angle
+            
+            # Update with best satellite found
+            if best_sat:
+                # Wait if needed
+                if best_wait_time > 0:
+                    # If waiting in orbit, add orbital positions during wait
+                    if current_location[0] == "orbit":
+                        orbit_idx = current_location[1]
+                        orbit = self.orbits[orbit_idx]
+                        steps = math.ceil(best_wait_time)
+                        for t in range(1, steps + 1):
+                            wait_proportion = min(t, best_wait_time) / best_wait_time
+                            wait_angle = (current_location[2] + wait_proportion * orbit.satellites[0]['speed'] * best_wait_time) % (2 * np.pi)
+                            wait_x = orbit.radius * np.cos(wait_angle)
+                            wait_y = orbit.radius * np.sin(wait_angle)
+                            trajectory.append((wait_x, wait_y, current_time + wait_proportion * best_wait_time))
+                
+                current_time += best_total_time
+                best_sat['refueled'] = True
+                
+                # Record the path and trajectory
+                orbit_idx = best_sat['orbit_idx']
+                orbit = self.orbits[orbit_idx]
+                
+                # Add trajectory points for transfer
+                if current_location[0] == "pad":
+                    # From pad to orbit
+                    steps = 10  # Number of points in trajectory
+                    pad_x, pad_y = self.launch_pad.get_position()
+                    target_x = orbit.radius * np.cos(best_intercept_angle)
+                    target_y = orbit.radius * np.sin(best_intercept_angle)
+                    for i in range(1, steps + 1):
+                        t = i / steps
+                        x = pad_x + t * (target_x - pad_x)
+                        y = pad_y + t * (target_y - pad_y)
+                        point_time = current_time - best_total_time + t * self.calculate_ascent_time(orbit, best_intercept_angle)
+                        trajectory.append((x, y, point_time))
+                else:
+                    # From orbit to orbit
+                    steps = 10
+                    prev_orbit_idx = current_location[1]
+                    prev_orbit = self.orbits[prev_orbit_idx]
+                    prev_angle = current_location[2]
+                    
+                    start_x = prev_orbit.radius * np.cos(prev_angle)
+                    start_y = prev_orbit.radius * np.sin(prev_angle)
+                    end_x = orbit.radius * np.cos(best_intercept_angle)
+                    end_y = orbit.radius * np.sin(best_intercept_angle)
+                    
+                    for i in range(1, steps + 1):
+                        t = i / steps
+                        x = start_x + t * (end_x - start_x)
+                        y = start_y + t * (end_y - start_y)
+                        transfer_time = self.calculate_transfer_time(
+                            prev_orbit.radius, prev_angle,
+                            orbit.radius, best_intercept_angle
+                        )
+                        point_time = current_time - best_total_time + t * transfer_time
+                        trajectory.append((x, y, point_time))
+                
+                current_location = ("orbit", orbit_idx, best_intercept_angle)
+                path.append(current_location)
+            else:
+                break
+        
+        # Return to launch pad
+        if current_location[0] == "orbit":
+            orbit_idx = current_location[1]
+            orbit = self.orbits[orbit_idx]
+            angle = current_location[2]
+            
+            descent_time = self.calculate_descent_time(orbit.radius, angle)
+            current_time += descent_time
+            
+            # Add trajectory points for descent
+            steps = 10
+            start_x = orbit.radius * np.cos(angle)
+            start_y = orbit.radius * np.sin(angle)
+            pad_x, pad_y = self.launch_pad.get_position()
+            
+            for i in range(1, steps + 1):
+                t = i / steps
+                x = start_x + t * (pad_x - start_x)
+                y = start_y + t * (pad_y - start_y)
+                point_time = current_time - descent_time + t * descent_time
+                trajectory.append((x, y, point_time))
+            
+            path.append(("pad", 0, self.launch_pad.angle))
+        
+        self.best_time = current_time
+        self.best_schedule = path
+        self.best_trajectory = trajectory
+        return current_time, path, trajectory
+
+class PlanetarySystem:
+    def __init__(self, planet_radius: float):
+        self.planet_radius = planet_radius
+        self.orbits = []
+        self.launch_pads = []
+        
+    def add_orbit(self, radius: float):
+        """Add an orbit at specified radius."""
+        orbit = Orbit(radius)
+        self.orbits.append(orbit)
+        return orbit
+    
+    def add_launch_pad(self, radius: float, angle: float):
+        """Add a launch pad at specified polar coordinates."""
+        pad = LaunchPad(radius, angle)
+        self.launch_pads.append(pad)
+        return pad
+    
+    def find_best_launch_pad(self):
+        """Find the best launch pad with minimum refuel mission time."""
+        best_pad = None
+        best_time = float('inf')
+        best_mission = None
+        
+        for pad in self.launch_pads:
+            mission = RefuelMission(pad, self.orbits)
+            time, path, trajectory = mission.find_optimal_refuel_sequence()
+            
+            if time < best_time:
+                best_time = time
+                best_pad = pad
+                best_mission = mission
+                
+        return best_pad, best_time, best_mission
+    
+    def visualize_system(self):
+        """Create a static visualization of the system."""
+        fig, ax = plt.subplots(figsize=(10, 10))
+        
+        # Draw planet
+        planet = plt.Circle((0, 0), self.planet_radius, color='lightblue')
+        ax.add_patch(planet)
+        
+        # Draw orbits
+        for orbit in self.orbits:
+            circle = plt.Circle((0, 0), orbit.radius, fill=False, color='gray', linestyle='--')
+            ax.add_patch(circle)
+            
+            # Draw satellites
+            for sat in orbit.satellites:
+                x = orbit.radius * np.cos(sat['angle'])
+                y = orbit.radius * np.sin(sat['angle'])
+                satellite = plt.Circle((x, y), self.planet_radius * 0.1, color='gray')
+                ax.add_patch(satellite)
+        
+        # Draw launch pads
+        for pad in self.launch_pads:
+            x, y = pad.get_position()
+            launch_pad = plt.Circle((x, y), self.planet_radius * 0.15, color='red')
+            ax.add_patch(launch_pad)
+        
+        # Set axis limits and properties
+        limit = max(orbit.radius for orbit in self.orbits) * 1.1
+        ax.set_xlim(-limit, limit)
+        ax.set_ylim(-limit, limit)
+        ax.set_aspect('equal')
+        ax.grid(True)
+        plt.title('Planetary System with Orbits, Satellites, and Launch Pads')
+        plt.show()
+    
+    def animate_mission(self, mission: RefuelMission, save_animation: bool = False):
+        """Create an animation of the refuel mission."""
+        trajectory = mission.best_trajectory
+        if not trajectory:
+            print("No trajectory to animate. Run find_optimal_refuel_sequence first.")
+            return
+        
+        fig, ax = plt.subplots(figsize=(10, 10))
+        
+        # Time range for animation
+        start_time = trajectory[0][2]
+        end_time = trajectory[-1][2]
+        
+        def update(frame):
+            ax.clear()
+            time = start_time + frame * (end_time - start_time) / 100
+            
+            # Draw planet
+            planet = plt.Circle((0, 0), self.planet_radius, color='lightblue')
+            ax.add_patch(planet)
+            
+            # Draw orbits
+            for orbit in self.orbits:
+                circle = plt.Circle((0, 0), orbit.radius, fill=False, color='gray', linestyle='--')
+                ax.add_patch(circle)
+            
+            # Draw satellites at current time
+            for i, orbit in enumerate(self.orbits):
+                for j, sat in enumerate(orbit.satellites):
+                    # Calculate satellite position at current time
+                    current_angle = (sat['angle'] + sat['speed'] * (time - start_time)) % (2 * np.pi)
+                    x = orbit.radius * np.cos(current_angle)
+                    y = orbit.radius * np.sin(current_angle)
+                    satellite = plt.Circle((x, y), self.planet_radius * 0.1, color='gray')
+                    ax.add_patch(satellite)
+            
+            # Draw launch pads
+            for pad in self.launch_pads:
+                x, y = pad.get_position()
+                launch_pad = plt.Circle((x, y), self.planet_radius * 0.15, color='red')
+                ax.add_patch(launch_pad)
+            
+            # Draw refuel tanker
+            # Find position at current time by interpolating trajectory
+            pos_x, pos_y = None, None
+            prev_t = None
+            for point in trajectory:
+                x, y, t = point
+                if t >= time:
+                    if prev_t is not None:
+                        # Interpolate between previous and current point
+                        prev_x, prev_y, prev_t = prev_t
+                        ratio = (time - prev_t) / (t - prev_t) if t != prev_t else 0
+                        pos_x = prev_x + ratio * (x - prev_x)
+                        pos_y = prev_y + ratio * (y - prev_y)
+                    else:
+                        pos_x, pos_y = x, y
+                    break
+                prev_t = (x, y, t)
+            
+            if pos_x is not None and pos_y is not None:
+                tanker = plt.Circle((pos_x, pos_y), self.planet_radius * 0.2, color='green')
+                ax.add_patch(tanker)
+            
+            # Draw trajectory path
+            path_x = [point[0] for point in trajectory if point[2] <= time]
+            path_y = [point[1] for point in trajectory if point[2] <= time]
+            if path_x and path_y:
+                ax.plot(path_x, path_y, 'g-', alpha=0.5)
+            
+            # Set axis properties
+            limit = max(orbit.radius for orbit in self.orbits) * 1.1
+            ax.set_xlim(-limit, limit)
+            ax.set_ylim(-limit, limit)
+            ax.set_aspect('equal')
+            ax.grid(True)
+            ax.set_title(f'Refuel Mission Simulation (Time: {time:.1f})')
+            
+            return ax
+        
+        ani = FuncAnimation(fig, update, frames=100, interval=100, blit=False)
+        
+        if save_animation:
+            ani.save('refuel_mission.gif', writer='pillow')
+        
+        plt.tight_layout()
+        plt.show()
+
+def run_simulation():
+    # Create a planetary system
+    system = PlanetarySystem(planet_radius=1.0)
+    
+    # Add orbits
+    orbit1 = system.add_orbit(radius=3.0)
+    orbit2 = system.add_orbit(radius=5.0)
+    orbit3 = system.add_orbit(radius=7.0)
+    
+    # Add satellites to orbits
+    # Orbit 1 satellites
+    orbit1.add_satellite(angle=0.5, speed=0.05)
+    orbit1.add_satellite(angle=2.0, speed=-0.03)
+    orbit1.add_satellite(angle=4.0, speed=0.02)
+    
+    # Orbit 2 satellites
+    orbit2.add_satellite(angle=1.0, speed=0.04)
+    orbit2.add_satellite(angle=3.0, speed=-0.02)
+    
+    # Orbit 3 satellites
+    orbit3.add_satellite(angle=0.0, speed=0.01)
+    orbit3.add_satellite(angle=2.5, speed=-0.015)
+    
+    # Add launch pads
+    for angle in np.linspace(0, 2*np.pi, 6, endpoint=False):
+        system.add_launch_pad(radius=system.planet_radius, angle=angle)
+    
+    # Visualize the system
+    system.visualize_system()
+    
+    # Find the best launch pad
+    best_pad, best_time, best_mission = system.find_best_launch_pad()
+    print(f"Best launch pad: radius={best_pad.radius}, angle={best_pad.angle*180/np.pi:.1f}°")
+    print(f"Best mission time: {best_time:.2f} time units")
+    
+    # Animate the best mission
+    system.animate_mission(best_mission)
+
+def run_test_cases():
+    """Run various test cases to validate the algorithm."""
+    print("Running test cases...")
+    
+    # Test case 1: Simple system with one orbit and one satellite
+    def test_case_1():
+        system = PlanetarySystem(planet_radius=1.0)
+        orbit = system.add_orbit(radius=4.0)
+        orbit.add_satellite(angle=0.0, speed=0.1)
+        
+        # Add pads at opposite sides
+        system.add_launch_pad(radius=system.planet_radius, angle=0.0)
+        system.add_launch_pad(radius=system.planet_radius, angle=np.pi)
+        
+        best_pad, best_time, _ = system.find_best_launch_pad()
+        print(f"Test Case 1: Best pad angle = {best_pad.angle*180/np.pi:.1f}°, Time = {best_time:.2f}")
+        return best_pad.angle*180/np.pi < 90  # Expect the pad at 0 degrees to be better
+    
+    # Test case 2: Multiple orbits with satellites in same direction
+    def test_case_2():
+        system = PlanetarySystem(planet_radius=1.0)
+        orbit1 = system.add_orbit(radius=3.0)
+        orbit2 = system.add_orbit(radius=6.0)
+        
+        orbit1.add_satellite(angle=0.0, speed=0.05)
+        orbit2.add_satellite(angle=0.0, speed=0.03)
+        
+        # Add pads at different points
+        for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
+            system.add_launch_pad(radius=system.planet_radius, angle=angle)
+        
+        best_pad, best_time, _ = system.find_best_launch_pad()
+        print(f"Test Case 2: Best pad angle = {best_pad.angle*180/np.pi:.1f}°, Time = {best_time:.2f}")
+        return best_time < float('inf')
+    
+    # Test case 3: Complex system with multiple orbits and satellites
+    def test_case_3():
+        system = PlanetarySystem(planet_radius=1.0)
+        
+        # Add orbits at different distances
+        orbits = [system.add_orbit(radius=r) for r in [2.5, 4.0, 6.0, 8.0]]
+        
+        # Add satellites with different speeds and positions
+        for i, orbit in enumerate(orbits):
+            for j in range(i+1):
+                angle = j * 2*np.pi/(i+1)
+                speed = 0.05 * (-1)**(i+j)  # Alternate directions
+                orbit.add_satellite(angle=angle, speed=speed)
+        
+        # Add 8 launch pads evenly distributed
+        for angle in np.linspace(0, 2*np.pi, 8, endpoint=False):
+            system.add_launch_pad(radius=system.planet_radius, angle=angle)
+        
+        best_pad, best_time, best_mission = system.find_best_launch_pad()
+        print(f"Test Case 3: Best pad angle = {best_pad.angle*180/np.pi:.1f}°, Time = {best_time:.2f}")
+        
+        # Visualize the best mission
+        system.animate_mission(best_mission)
+        return True
+    
+    # Run all test cases
+    tests = [test_case_1, test_case_2, test_case_3]
+    results = [test() for test in tests]
+    
+    print(f"Test results: {results.count(True)}/{len(results)} tests passed")
 
 if __name__ == "__main__":
-    print("Testing Orbital Refueling Mission Planning Algorithm")
-    results = test_algorithm()
+    # Run the test cases
+    run_test_cases()
     
-    # Summary of results
-    print("\nSummary of Results:")
-    for i, result in enumerate(results):
-        print(f"\nTest Case {i+1}: {result['test_case']}")
-        print(f"Satellites serviced: {result['metrics']['satellites_serviced']} / {result['satellites_total']}")
-        print(f"Mission success: {result['metrics']['mission_success']}")
-        print(f"Sequence: {result['sequence']}")
-        print(f"Fuel efficiency: {result['metrics']['fuel_efficiency']:.4f} satellites/kg")
+    # Run the main simulation
+    run_simulation()
