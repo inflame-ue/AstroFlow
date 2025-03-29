@@ -6,58 +6,6 @@
     <title>Space Background</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
-    <style>
-        .data-panel {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            max-width: 300px;
-            max-height: 400px;
-            overflow: auto;
-            z-index: 1000;
-            display: none;
-        }
-        .toggle-data-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 1001;
-        }
-        .toggle-data-btn:hover {
-            background-color: #45a049;
-        }
-        .status-message {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            padding: 15px;
-            border-radius: 5px;
-            color: white;
-            z-index: 1001;
-            animation: fadeOut 5s forwards;
-        }
-        .status-success {
-            background-color: rgba(76, 175, 80, 0.8);
-        }
-        .status-error {
-            background-color: rgba(244, 67, 54, 0.8);
-        }
-        @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
-        }   
-    </style>
 </head>
 <body 
     data-earth-image-url="{{ url_for('static', filename='images/earth.svg') }}"

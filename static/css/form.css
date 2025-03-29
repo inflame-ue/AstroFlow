@@ -11,7 +11,7 @@
 }
 
 body {
-  background-color: var(--background);
+  background-color: #000;
   color: var(--text-primary);
   font-family: 'Courier New', monospace;
   margin: 0;
@@ -26,6 +26,7 @@ body {
   margin: 0 auto;
   padding: 20px;
 }
+
 
 h1 {
   color: var(--text-primary);
@@ -92,7 +93,8 @@ label {
   font-size: 0.9em;
 }
 
-input, select {
+input,
+select {
   width: 98%;
   padding: 8px 0px;
   padding-left: 8px;
@@ -102,13 +104,15 @@ input, select {
   border-radius: 4px;
 }
 
-input:focus, select:focus {
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent-brightred);
   box-shadow: var(--subtle-glow);
 }
 
-.add-button, .add-field-btn {
+.add-button,
+.add-field-btn {
   cursor: pointer;
   padding: 8px 15px;
   color: var(--accent-red);
@@ -121,7 +125,8 @@ input:focus, select:focus {
   display: inline-block;
 }
 
-.add-button:hover, .add-field-btn:hover {
+.add-button:hover,
+.add-field-btn:hover {
   background-color: rgba(0, 255, 255, 0.1);
   box-shadow: var(--neon-glow);
 }
@@ -173,8 +178,13 @@ input:focus, select:focus {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 #formSummary {
@@ -216,9 +226,9 @@ input:focus, select:focus {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: 
-      linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 20px 20px;
   z-index: -1;
   pointer-events: none;
@@ -230,7 +240,8 @@ input:focus, select:focus {
   right: 0;
   height: 100vh;
   width: 450px;
-  background-color: transparent; /* Changed from white to transparent */
+  background-color: transparent;
+  /* Changed from white to transparent */
   transition: transform 0.4s ease-in-out;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
@@ -244,9 +255,11 @@ input:focus, select:focus {
 .toggle-bar {
   position: fixed;
   top: 50%;
-  right: 10px; /* Changed from 0 to 10px to disconnect from edge */
+  right: 10px;
+  /* Changed from 0 to 10px to disconnect from edge */
   transform: translateY(-50%);
-  width: 3px; /* Changed from 6px to 3px to make thinner */
+  width: 3px;
+  /* Changed from 6px to 3px to make thinner */
   height: 100px;
   background-color: #ff3b30;
   cursor: pointer;
@@ -263,4 +276,70 @@ input:focus, select:focus {
 
 .toggle-bar:hover {
   background-color: #ff6b6b;
+}
+
+.data-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 15px;
+  border-radius: 5px;
+  max-width: 300px;
+  max-height: 400px;
+  overflow: auto;
+  z-index: 1000;
+  display: none;
+}
+
+.toggle-data-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 1001;
+}
+
+.toggle-data-btn:hover {
+  background-color: #45a049;
+}
+
+.status-message {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  padding: 15px;
+  border-radius: 5px;
+  color: white;
+  z-index: 1001;
+  animation: fadeOut 5s forwards;
+}
+
+.status-success {
+  background-color: rgba(76, 175, 80, 0.8);
+}
+
+.status-error {
+  background-color: rgba(244, 67, 54, 0.8);
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
