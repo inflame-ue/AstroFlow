@@ -61,7 +61,7 @@
 </head>
 <body 
     data-earth-image-url="{{ url_for('static', filename='images/earth.png') }}"
-    data-station-angle="{{ station_angle|default(0) }}"
+    data-station-angles="{{ station_angles|tojson|safe }}"
 >
     <!-- Status messages -->
     {% if status %}

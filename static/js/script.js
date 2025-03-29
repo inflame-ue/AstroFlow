@@ -14,7 +14,7 @@ document.getElementById('canvas-container').appendChild(app.view);
 let earth;
 let orbitsContainer;
 let satellitesContainer; // Container for satellites
-let fuelStation; // Graphics for the fuel station
+let fuelStations = []; // Array for multiple fuel stations
 const satellites = []; // Array to hold satellite data
 
 // Scale factor: 97.84 kilometers per pixel
@@ -117,22 +117,38 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     // Add Earth last so it's on top of orbits and satellites
     app.stage.addChild(earth);
 
-    // --- Create Fuel Station Sprite ---
-    fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]); // Use variable path
-    fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
-    fuelStation.scale.set(0.06); // Make it smaller again
+    // --- Create Fuel Station Sprites (Multiple) ---
+    const stationAnglesJson = document.body.getAttribute('data-station-angles') || '[]'; // Get JSON string
+    let stationAngles = [];
+    try {
+        stationAngles = JSON.parse(stationAnglesJson); // Parse JSON into array
+    } catch (e) {
+        console.error("Error parsing station angles JSON:", e, stationAnglesJson);
+        stationAngles = []; // Default to empty array on error
+    }
     
-    // Position it relative to Earth's center based on angle
-    const stationAngleDegrees = parseFloat(document.body.getAttribute('data-station-angle')) || 0; // Get angle from data attribute, default 0
-    const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180); // Convert degrees to radians, offset so 0 is top
-
-    const earthRadius = earth.height / 2; // Use height for vertical radius
-    fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
-    fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
-    fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
+    // Clear previous stations if any (e.g., if re-running init logic)
+    fuelStations.forEach(fs => fs.destroy());
+    fuelStations = [];
     
-    app.stage.addChild(fuelStation);
-    // --- End Fuel Station Sprite ---
+    stationAngles.forEach(stationAngleDegrees => {
+        const fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]);
+        fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
+        fuelStation.scale.set(0.06); // Make it smaller again
+        fuelStation.angleData = stationAngleDegrees; // Store angle on the sprite itself
+        
+        // Position it relative to Earth's center based on angle
+        const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180); // Convert degrees to radians, offset so 0 is top
+        const earthRadius = earth.height / 2; // Use height for vertical radius
+        
+        fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
+        fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
+        fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
+        
+        app.stage.addChild(fuelStation);
+        fuelStations.push(fuelStation); // Add to array
+    });
+    // --- End Fuel Station Sprites ---
 
 }).catch((error) => {
     console.error('Error loading assets:', error);
@@ -183,7 +199,7 @@ app.ticker.add((delta) => { // Pass delta for potential frame-rate independent m
     });
 });
 
-// Handle window resize (adjust orbits, satellites, and fuel station)
+// Handle window resize (adjust orbits, satellites, and ALL fuel stations)
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
     const centerX = app.screen.width / 2;
@@ -200,14 +216,18 @@ window.addEventListener('resize', () => {
         satellitesContainer.x = centerX;
         satellitesContainer.y = centerY;
     }
-    if (fuelStation && fuelStation.parent && earth && earth.parent) { // Ensure earth exists for radius calc
-        // Reposition fuel station relative to the new Earth center based on angle
-        const stationAngleDegrees = parseFloat(document.body.getAttribute('data-station-angle')) || 0; // Get angle again
-        const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180);
+    if (earth && earth.parent) { // Ensure earth exists for radius calc
         const earthRadius = earth.height / 2; 
-        
-        fuelStation.x = centerX + earthRadius * Math.cos(stationAngleRadians);
-        fuelStation.y = centerY + earthRadius * Math.sin(stationAngleRadians); 
-        fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Maintain rotation
+        fuelStations.forEach(fuelStation => {
+            if (fuelStation && fuelStation.parent) {
+                // Reposition fuel station relative to the new Earth center based on its stored angle
+                const stationAngleDegrees = fuelStation.angleData; // Get stored angle
+                const stationAngleRadians = (stationAngleDegrees - 90) * (Math.PI / 180);
+                
+                fuelStation.x = centerX + earthRadius * Math.cos(stationAngleRadians);
+                fuelStation.y = centerY + earthRadius * Math.sin(stationAngleRadians); 
+                fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Maintain rotation
+            }
+        });
     }
 });
