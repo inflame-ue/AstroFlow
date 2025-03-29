@@ -22,18 +22,18 @@ const satellites = []; // Array to hold satellite data
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
 
-const formDataElement = document.getElementById('form-data');
-const formData = JSON.parse(formDataElement.value); // Parse the JSON string
-console.log("formData", formData);
-
 // Get the correct URL for the earth.png image
-const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.svg'; // Use svg
-const satelliteImageUrl = '/static/images/satellite.png'; // Define path
-const gasStationImageUrl = '/static/images/gas_station.svg'; // Define path - Use svg
+const earthImageUrl = document.body.getAttribute('data-earth-image-url') || 'static/images/earth.svg'; // Use svg
+const satelliteImageUrl = 'static/images/satellite.png'; // Define path
+const gasStationImageUrl = 'static/images/gas_station.svg'; // Define path - Use svg
+
+// fetch form data from endpoint
+fetch('/api/form_data')
+    .then((res)=>{ console.log(res.json()) })
+
 
 // Load all textures
 PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((textures) => {
-
     // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container();
     app.stage.addChild(orbitsContainer);

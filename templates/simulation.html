@@ -62,7 +62,6 @@
 <body>
     data-earth-image-url="{{ url_for('static', filename='images/earth.svg') }}"
     data-form-status="{{ status }}"
-    <input type="hidden" id="form-data" value="{{ form_data_json | tojson | safe }}">
     
     <!-- Status messages -->
     {% if status %}
@@ -100,7 +99,7 @@
         });
     </script>
     {% endif %}
-    
+
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html> 
