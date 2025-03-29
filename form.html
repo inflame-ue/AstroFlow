@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstroFlow Configuration</title>
+    <link rel="stylesheet" href="form.css">
+    <script src="form.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <h1>AstroFlow Configuration</h1>
+        
+        <form id="satelliteForm">
+            <div class="section">
+                <h2>Launchpads</h2>
+                <div id="launchpadsContainer">
+                    <!-- Launchpads will be generated here -->
+                </div>
+                <div class="add-button" id="addLaunchpadBtn">+ Add Launchpad</div>
+            </div>
+            
+            <div class="section">
+                <h2>Orbits</h2>
+                <div id="orbitsContainer">
+                    <!-- Orbits will be generated here -->
+                </div>
+                <div class="add-button" id="addOrbitBtn">+ Add Orbit</div>
+            </div>
+            
+            <div class="section">
+                <h2>Satellites</h2>
+                <div id="satellitesContainer">
+                    <!-- Satellites will be generated here -->
+                </div>
+                <div class="add-button" id="addSatelliteBtn">+ Add Satellite</div>
+            </div>
+            
+            <div class="form-submit">
+                <button type="submit" class="submit-btn">Generate Configuration</button>
+            </div>
+            
+            <div id="formSummary">
+                <h2>Configuration Summary</h2>
+                <div id="summaryContent"></div>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

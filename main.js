@@ -20,54 +20,69 @@ for (let i = 0; i < 100; i++) {
 }
 app.stage.addChild(background);
 
-// Create orbital paths around Earth (dashed lines)
-const orbits = new PIXI.Graphics();
-// Use a light blue color with low alpha for the orbits
-orbits.lineStyle({
-  width: 1,
-  color: 0x3498db,
-  alpha: 0.5,
-  alignment: 0,
-  cap: PIXI.LINE_CAP.ROUND,
-  join: PIXI.LINE_JOIN.ROUND,
-  // Create dashed effect
-  dash: [5, 10],
-  dashOffset: 0
-});
-
-// Earth position reference point (aligned with the Earth sprite)
-// We'll position this where the Earth will be positioned
-const earthRadius = 150; // Approximate size of the Earth sprite
-const earthCenterX = earthRadius * 0.5; // Adjust based on Earth position
-const earthCenterY = app.screen.height - earthRadius * 0.5; // Bottom aligned
-
-// Draw 5 elliptical orbits with increasing size
-for (let i = 1; i <= 5; i++) {
-  // Calculate orbit size based on index
-  const orbitWidth = earthRadius * 0.8 + i * 70;  // Width of orbit ellipse
-  const orbitHeight = earthRadius * 0.6 + i * 50;  // Height of orbit ellipse (slightly smaller for perspective)
-  
-  // Draw the elliptical orbit
-  orbits.drawEllipse(earthCenterX, earthCenterY, orbitWidth, orbitHeight);
-}
-app.stage.addChild(orbits);
-
-// Create Earth using an image sprite instead of a drawn circle
+// First create and position the Earth sprite to use its position as a reference
 const earth = new PIXI.Sprite(PIXI.Texture.from('earth.png')); 
-earth.anchor.set(0.5, 0.5); // Center anchor point
+earth.anchor.set(0.3, 0.7); // Anchor point near bottom-left corner
 earth.scale.set(1, 1); // Adjust scale as needed for your image
-
 // Position Earth at bottom left with 20% off-screen
-// This should align with the orbit center we defined above
+const earthCenterX = 0; // Left edge
+const earthCenterY = app.screen.height; // Bottom edge
 earth.position.set(earthCenterX, earthCenterY);
 
-// Move 20% off-screen to the left and bottom
-const offsetX = earth.width * 0.2;
-const offsetY = earth.height * 0.2;
-earth.position.x -= offsetX;
-earth.position.y += offsetY;
+// Create orbital paths around Earth (dashed lines)
+const orbits = new PIXI.Graphics();
 
-app.stage.addChild(earth);
+// Calculate the true center of the Earth (accounting for anchor point)
+// With anchor(0.3, 0.7), we need to move the orbit center relative to the earth position
+const earthRadius = 150; // Approximate size of the Earth sprite
+
+// We need to load the texture and wait for it to load to get accurate dimensions
+PIXI.Assets.load('earth.png').then((texture) => {
+  // Get the actual dimensions of the Earth sprite
+  const earthWidth = texture.width * earth.scale.x;
+  const earthHeight = texture.height * earth.scale.y;
+  
+  // Calculate the actual center of the Earth based on its position and anchor
+  // For anchor(0.3, 0.7), the center is offset from the position
+  const trueEarthCenterX = earthCenterX + earthWidth * (0.21);
+  const trueEarthCenterY = earthCenterY - earthHeight * (0.21);
+  
+  // Clear previous orbits if any
+  orbits.clear();
+  
+  // Use the light blue color with low alpha for the orbits
+  orbits.lineStyle({
+    width: 1,
+    color: 0x3498db,
+    alpha: 0.5,
+    alignment: 1,
+    cap: PIXI.LINE_CAP.ROUND,
+    join: PIXI.LINE_JOIN.ROUND,
+    dash: [5, 10],
+    dashOffset: 0
+  });
+  
+  // Draw 5 elliptical orbits around the true Earth center
+  for (let i = 1; i <= 5; i++) {
+    // Calculate orbit size based on index - starting much smaller
+    const orbitWidth = earthWidth * 0.3 + i * 60;  // Width of orbit ellipse (smaller starting size)
+    const orbitHeight = earthWidth * 0.3 + i * 60;  // Same height for perfect circles
+    
+    // Draw the circular orbit - using pure circles for clear 2D look
+    orbits.drawEllipse(trueEarthCenterX, trueEarthCenterY, orbitWidth, orbitHeight);
+  }
+  
+  // Ensure proper rendering order
+  app.stage.removeChild(orbits);
+  app.stage.removeChild(earth);
+  app.stage.addChild(orbits);
+  app.stage.addChild(earth);
+});
+
+// Apply darkening filter to the Earth
+const colorMatrix = new PIXI.filters.ColorMatrixFilter();
+colorMatrix.brightness(0.5); // 50% darker
+earth.filters = [colorMatrix];
 
 // Create rocket
 const rocket = new PIXI.Graphics();
