@@ -1,177 +1,15 @@
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Circle
-from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-import time
+
 
 # package imports
-from constants import G, EARTH_MASS, EARTH_RADIUS
-
-
-@dataclass
-class Orbit:
-    radius: float  # km
-    satellites: List['Satellite'] = None
-    
-    def __post_init__(self):
-        if self.satellites is None:
-            self.satellites = []
-
-@dataclass
-class Satellite:
-    orbit: Orbit
-    angle: float  # radians
-    speed: float  # radians per second
-    position: Tuple[float, float] = None
-    
-    def __post_init__(self):
-        self.update_position()
-    
-    def update_position(self, time_elapsed: float = 0):
-        """Update satellite position based on orbital parameters"""
-        self.angle = (self.angle + self.speed * time_elapsed) % (2 * np.pi)
-        self.position = (
-            self.orbit.radius * np.cos(self.angle),
-            self.orbit.radius * np.sin(self.angle)
-        )
-
-@dataclass
-class LaunchPad:
-    radius: float  # Distance from planet center
-    angle: float  # radians
-    position: Tuple[float, float] = None
-    
-    def __post_init__(self):
-        self.position = (
-            self.radius * np.cos(self.angle),
-            self.radius * np.sin(self.angle)
-        )
-
-@dataclass
-class RefuelTanker:
-    position: Tuple[float, float]
-    velocity: Tuple[float, float]
-    fuel: float = 1000.0
-    dry_mass: float = 500.0  # kg - mass of the tanker without fuel
-    trajectory: List[Tuple[float, float]] = None
-    waiting: bool = False
-    target_satellite: Optional[Satellite] = None
-    specific_impulse: float = 300.0  # seconds - typical for chemical propulsion
-    
-    def __post_init__(self):
-        if self.trajectory is None:
-            self.trajectory = [self.position]
-    
-    @property
-    def total_mass(self) -> float:
-        """Total mass of the tanker including fuel"""
-        return self.dry_mass + self.fuel
-    
-    def consume_fuel(self, delta_v: float) -> float:
-        """
-        Consume fuel based on the rocket equation and return actual delta_v achieved.
-        If not enough fuel is available, the maximum possible delta_v is returned.
-        """
-        # Rocket equation: delta_v = Isp * g0 * ln(m0/m1)
-        # Rearranged: m1 = m0 / exp(delta_v / (Isp * g0))
-        g0 = 9.81  # m/s²
-        
-        # Calculate final mass after burn
-        m0 = self.total_mass
-        m1 = m0 / np.exp(delta_v / (self.specific_impulse * g0))
-        
-        # Calculate fuel consumed
-        fuel_consumed = m0 - m1
-        
-        # Check if we have enough fuel
-        if fuel_consumed > self.fuel:
-            # Not enough fuel, calculate maximum achievable delta_v
-            max_m1 = self.dry_mass
-            max_delta_v = self.specific_impulse * g0 * np.log(m0 / max_m1)
-            self.fuel = 0
-            return max_delta_v
-        else:
-            # Enough fuel, consume it
-            self.fuel -= fuel_consumed
-            return delta_v
-
-@dataclass
-class Shuttle:
-    position: Tuple[float, float]
-    velocity: Tuple[float, float]
-    fuel: float = 1000.0
-    trajectory: List[Tuple[float, float]] = None
-    deployed: bool = False
-
-    def __post_init__(self):
-        if self.trajectory is None:
-            self.trajectory = [self.position]
-
-class HohmannTransfer:
-    @staticmethod
-    def calculate_delta_v(r1: float, r2: float, tanker: RefuelTanker = None, mu: float = G * EARTH_MASS) -> float:
-        """
-        Calculate delta-v for Hohmann transfer between circular orbits.
-        If a tanker is provided, apply the rocket equation and consume fuel.
-        Returns a single delta-v value.
-        """
-        # First burn (departure)
-        v1 = np.sqrt(mu / r1)
-        v_transfer_perigee = np.sqrt(mu * (2/r1 - 2/(r1+r2)))
-        delta_v1 = abs(v_transfer_perigee - v1)
-        
-        # Second burn (insertion)
-        v2 = np.sqrt(mu / r2)
-        v_transfer_apogee = np.sqrt(mu * (2/r2 - 2/(r1+r2)))
-        delta_v2 = abs(v2 - v_transfer_apogee)
-        
-        # Total theoretical delta-v
-        total_delta_v = delta_v1 + delta_v2
-        
-        # If tanker is provided, apply rocket equation and consume fuel
-        if tanker:
-            # First burn
-            actual_dv1 = tanker.consume_fuel(delta_v1)
-            
-            # Second burn - only if first burn was successful
-            if actual_dv1 == delta_v1:
-                actual_dv2 = tanker.consume_fuel(delta_v2)
-                return actual_dv1 + actual_dv2
-            else:
-                return actual_dv1  # Partial first burn only
-        
-        return total_delta_v  # Return theoretical value if no tanker provided
-    
-    @staticmethod
-    def calculate_transfer_time(r1: float, r2: float, mu: float = G * EARTH_MASS) -> float:
-        """Calculate time for Hohmann transfer between circular orbits"""
-        a = (r1 + r2) / 2  # Semi-major axis of transfer orbit
-        return np.pi * np.sqrt(a**3 / mu)  # Half-orbit period
-    
-    @staticmethod
-    def calculate_hohmann_trajectory(r1: float, r2: float, start_angle: float, 
-                                   steps: int = 100, mu: float = G * EARTH_MASS) -> List[Tuple[float, float]]:
-        """Calculate trajectory points for Hohmann transfer"""
-        a = (r1 + r2) / 2  # Semi-major axis
-        e = abs(r2 - r1) / (r2 + r1)  # Eccentricity
-        
-        trajectory = []
-        for i in range(steps + 1):
-            # True anomaly from 0 to π (half orbit)
-            theta = i * np.pi / steps
-            
-            # Distance from focus (polar form of ellipse)
-            r = a * (1 - e**2) / (1 + e * np.cos(theta))
-            
-            # Convert to Cartesian coordinates
-            x = r * np.cos(theta + start_angle)
-            y = r * np.sin(theta + start_angle)
-            trajectory.append((x, y))
-            
-        return trajectory
+from astroalgo.constants import G, EARTH_MASS, EARTH_RADIUS
+from astroalgo.hohmann_transfer import HohmannTransfer
+from astroalgo.astro_dataclasses import RefuelTanker, Orbit, LaunchPad, Satellite
 
 class MissionPlanner:
     def __init__(self, planet_radius: float, tanker: RefuelTanker, planet_mass: float = EARTH_MASS):
@@ -604,9 +442,3 @@ def test_mission_planner():
     
     print("Tests completed.")
 
-if __name__ == "__main__":
-    # Uncomment to run tests
-    # test_mission_planner()
-    
-    # Run main example simulation
-    run_example()
