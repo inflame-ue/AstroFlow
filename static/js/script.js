@@ -2,8 +2,10 @@
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
-    backgroundColor: 0x000000, // Restore background color
+    backgroundColor: 0x000000,
     resolution: window.devicePixelRatio || 1,
+    antialias: true,
+    autoDensity: true,
 });
 
 // Add the canvas to the container
@@ -15,10 +17,40 @@ let satellitesContainer; // Container for satellites
 let fuelStation; // Graphics for the fuel station
 const satellites = []; // Array to hold satellite data
 
-// Orbit definitions (Re-added after merge)
-const orbitRadii = [300, 364, 428];
-const angularSpeeds = [0.005, 0.003, 0.002]; // Slower speeds for outer orbits (example values)
-const satelliteDistribution = [3, 3, 4]; // 3 + 3 + 4 = 10 satellites
+// Scale factor: 97.84 kilometers per pixel
+const KM_TO_PIXEL_SCALE = 1 / 97.84;
+
+// JSON data for orbits, satellites and launchpads
+const astroData = {
+    "launchpads": {
+        "1": {
+            "angle1": "80",
+            "angle2": ""
+        }
+    },
+    "orbits": {
+        "1": {
+            "radius": "42164",
+            "speed": "7.8"
+        }
+    },
+    "satellites": {
+        "1": {
+            "angle": "45",
+            "orbitId": "1",
+            "radius": "42164",
+            "speed": "7.8"
+        }
+    }
+};
+
+// Extract orbit data from JSON
+const orbitRadii = Object.values(astroData.orbits).map(orbit =>
+    parseFloat(orbit.radius) * KM_TO_PIXEL_SCALE
+);
+const angularSpeeds = Object.values(astroData.orbits).map(orbit =>
+    parseFloat(orbit.speed) * 0.0001 // Scale speed appropriately
+);
 
 // Get the correct URL for the earth.png image
 const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.png';
@@ -29,56 +61,50 @@ const gasStationImageUrl = '/static/images/gas_station.png'; // Define path
 PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((textures) => {
 
     // --- Create Orbits --- 
-    orbitsContainer = new PIXI.Container(); // Assign to global scope
+    orbitsContainer = new PIXI.Container();
     app.stage.addChild(orbitsContainer);
-    
+
     const orbitGraphics = new PIXI.Graphics();
     orbitsContainer.addChild(orbitGraphics);
     orbitsContainer.x = app.screen.width / 2;
     orbitsContainer.y = app.screen.height / 2;
     orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5);
+
+    // Draw orbits based on scaled JSON data
     orbitRadii.forEach(radius => {
         orbitGraphics.drawCircle(0, 0, radius);
     });
     // --- End Orbits ---
 
     // --- Create Satellites --- 
-    satellitesContainer = new PIXI.Container(); // Assign to global scope
+    satellitesContainer = new PIXI.Container();
     app.stage.addChild(satellitesContainer);
     satellitesContainer.x = app.screen.width / 2;
     satellitesContainer.y = app.screen.height / 2;
 
-    let satelliteIndex = 0;
-    for (let i = 0; i < orbitRadii.length; i++) {
-        const radius = orbitRadii[i];
-        const speed = angularSpeeds[i];
-        const numSatellitesOnOrbit = satelliteDistribution[i];
+    // Create satellites based on JSON data
+    Object.values(astroData.satellites).forEach((satData, index) => {
+        const orbitIndex = parseInt(satData.orbitId) - 1; // Convert to 0-based index
+        const radius = parseFloat(satData.radius) * KM_TO_PIXEL_SCALE;
+        const angle = parseFloat(satData.angle) * (Math.PI / 180); // Convert degrees to radians
+        const speed = parseFloat(satData.speed) * 0.0001; // Scale speed appropriately
 
-        for (let j = 0; j < numSatellitesOnOrbit; j++) {
-            // Use the preloaded satellite texture
-            const satellite = new PIXI.Sprite(textures[satelliteImageUrl]); // Use variable path 
-            satellite.anchor.set(0.5); // Center the sprite
-            satellite.scale.set(0.07); // Made satellites smaller
-            // satellite.beginFill(0xFF0000); // Red color for satellites - REMOVED
-            // satellite.drawCircle(0, 0, 5); // 5px radius - REMOVED
-            // satellite.endFill(); - REMOVED
+        const satellite = new PIXI.Sprite(textures[satelliteImageUrl]);
+        satellite.anchor.set(0.5);
+        satellite.scale.set(0.07);
 
-            const angle = (j / numSatellitesOnOrbit) * Math.PI * 2; // Spread satellites evenly
-            
-            // Initial position relative to container center (0,0)
-            satellite.x = radius * Math.cos(angle);
-            satellite.y = radius * Math.sin(angle);
+        // Initial position
+        satellite.x = radius * Math.cos(angle);
+        satellite.y = radius * Math.sin(angle);
 
-            satellitesContainer.addChild(satellite);
-            satellites.push({
-                graphics: satellite, // Now stores the sprite
-                radius: radius,
-                angle: angle,
-                speed: speed
-            });
-            satelliteIndex++;
-        }
-    }
+        satellitesContainer.addChild(satellite);
+        satellites.push({
+            graphics: satellite,
+            radius: radius,
+            angle: angle,
+            speed: speed
+        });
+    });
     // --- End Satellites ---
 
     // Create Earth sprite using the preloaded texture
@@ -112,7 +138,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     console.error('Error loading assets:', error);
     // Create a fallback circle if PNG loading fails
     const fallbackEarth = new PIXI.Graphics();
-    fallbackEarth.beginFill(0x4287f5); // Blue fallback
+    fallbackEarth.beginFill(0x4287f5);
     fallbackEarth.drawCircle(0, 0, 100);
     fallbackEarth.endFill();
     fallbackEarth.x = app.screen.width / 2;
@@ -129,10 +155,10 @@ for (let i = 0; i < numStars; i++) {
     star.beginFill(0xFFFFFF);
     star.drawCircle(0, 0, Math.random() * 2);
     star.endFill();
-    
+
     star.x = Math.random() * app.screen.width;
     star.y = Math.random() * app.screen.height;
-    
+
     stars.push(star);
     app.stage.addChild(star);
 }
@@ -143,7 +169,7 @@ app.ticker.add((delta) => { // Pass delta for potential frame-rate independent m
     stars.forEach(star => {
         star.alpha = Math.random();
     });
-    
+
     // Rotate Earth
     if (earth && earth.parent) {
         // earth.rotation += 0.001; // Removed rotation
@@ -167,12 +193,12 @@ window.addEventListener('resize', () => {
         earth.y = centerY;
     }
     if (orbitsContainer && orbitsContainer.parent) {
-         orbitsContainer.x = centerX;
-         orbitsContainer.y = centerY;
+        orbitsContainer.x = centerX;
+        orbitsContainer.y = centerY;
     }
     if (satellitesContainer && satellitesContainer.parent) {
-         satellitesContainer.x = centerX;
-         satellitesContainer.y = centerY;
+        satellitesContainer.x = centerX;
+        satellitesContainer.y = centerY;
     }
     if (fuelStation && fuelStation.parent && earth && earth.parent) { // Ensure earth exists for radius calc
         // Reposition fuel station relative to the new Earth center based on angle
@@ -184,4 +210,4 @@ window.addEventListener('resize', () => {
         fuelStation.y = centerY + earthRadius * Math.sin(stationAngleRadians); 
         fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Maintain rotation
     }
-}); 
+});
