@@ -16,6 +16,7 @@ def index():
         if form_data:
             try:
                 data = json.loads(form_data)
+                data = normalize_form_data(data)
                 session['form_data'] = data # store data in session for use in simulation
                 return redirect(url_for('simulation'))
             except Exception as e:
