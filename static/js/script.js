@@ -2,8 +2,10 @@
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
-    backgroundColor: 0x000000, // Restore background color
+    backgroundColor: 0x000000,
     resolution: window.devicePixelRatio || 1,
+    antialias: true,
+    autoDensity: true,
 });
 
 // Add the canvas to the container
