@@ -12,6 +12,7 @@ document.getElementById('canvas-container').appendChild(app.view);
 let earth;
 let orbitsContainer;
 let satellitesContainer; // Container for satellites
+let fuelStation; // Graphics for the fuel station
 const satellites = []; // Array to hold satellite data
 
 // Orbit definitions
@@ -20,7 +21,7 @@ const angularSpeeds = [0.005, 0.003, 0.002]; // Slower speeds for outer orbits (
 const satelliteDistribution = [3, 3, 4]; // 3 + 3 + 4 = 10 satellites
 
 // Load textures
-PIXI.Assets.load(['earth.png', 'satellite.png']).then((textures) => {
+PIXI.Assets.load(['earth.png', 'satellite.png', 'gas_station.png']).then((textures) => {
 
     // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container(); // Assign to global scope
@@ -85,6 +86,19 @@ PIXI.Assets.load(['earth.png', 'satellite.png']).then((textures) => {
     // Add Earth last so it's on top of orbits and satellites
     app.stage.addChild(earth);
 
+    // --- Create Fuel Station Sprite ---
+    fuelStation = new PIXI.Sprite(textures['gas_station.png']);
+    fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
+    fuelStation.scale.set(0.08); // Make it even smaller
+    
+    // Position it relative to Earth's center
+    const earthRadius = earth.height / 2; // Use height for vertical radius
+    fuelStation.x = earth.x; // Center horizontally with Earth
+    fuelStation.y = earth.y - earthRadius; // Place bottom anchor at Earth's top edge
+    
+    app.stage.addChild(fuelStation);
+    // --- End Fuel Station Sprite ---
+
 }).catch((error) => {
     console.error('Error loading assets:', error);
     // Create a fallback circle if PNG loading fails
@@ -123,7 +137,7 @@ app.ticker.add((delta) => { // Pass delta for potential frame-rate independent m
     
     // Rotate Earth
     if (earth && earth.parent) {
-        earth.rotation += 0.001;
+        // earth.rotation += 0.001; // Removed rotation
     }
 
     // Animate Satellites
@@ -134,7 +148,7 @@ app.ticker.add((delta) => { // Pass delta for potential frame-rate independent m
     });
 });
 
-// Handle window resize (adjust orbits and satellites containers)
+// Handle window resize (adjust orbits, satellites, and fuel station)
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
     const centerX = app.screen.width / 2;
@@ -150,5 +164,11 @@ window.addEventListener('resize', () => {
     if (satellitesContainer && satellitesContainer.parent) {
          satellitesContainer.x = centerX;
          satellitesContainer.y = centerY;
+    }
+    if (fuelStation && fuelStation.parent && earth && earth.parent) { // Ensure earth exists for radius calc
+        // Reposition fuel station relative to the new Earth center
+        const earthRadius = earth.height / 2; 
+        fuelStation.x = centerX; // Center horizontally
+        fuelStation.y = centerY - earthRadius; // Place at top edge
     }
 }); 
