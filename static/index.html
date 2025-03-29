@@ -3,17 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Satellite Refueling Visualization</title>
+    <title>Satellite Refueling Visualization 2D</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
         }
         canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
+            border: 1px solid #333;
+            background-color: #000;
+            max-width: 100%;
+            max-height: 100vh;
         }
         #info {
             position: absolute;
@@ -45,6 +52,8 @@
             color: white;
             border: none;
             border-radius: 3px;
+            display: block;
+            width: 100%;
         }
         button:hover {
             background-color: #45a049;
@@ -53,17 +62,17 @@
 </head>
 <body>
     <div id="info">
-        <h3>Satellite Refueling Visualization</h3>
-        <p>Use mouse to rotate view</p>
-        <p>Scroll to zoom</p>
+        <h3>Satellite Refueling Visualization 2D</h3>
+        <p>Satellites orbit at different speeds</p>
+        <p>Green dot: Fuel Station</p>
+        <p>Red dot: Rocket</p>
+        <p>Blue dots: Satellites</p>
     </div>
     <div id="controls">
-        <button onclick="generateRandomSatellites()">Generate Random Satellites</button>
-        <button onclick="startRefueling()">Start Refueling</button>
-        <button onclick="resetScene()">Reset Scene</button>
+        <button onclick="startSimulation()">Start Simulation</button>
+        <button onclick="resetSimulation()">Reset Simulation</button>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <canvas id="canvas"></canvas>
     <script src="main.js"></script>
 </body>
 </html> 
