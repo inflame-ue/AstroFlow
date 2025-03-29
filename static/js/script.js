@@ -11,8 +11,11 @@ document.getElementById('canvas-container').appendChild(app.view);
 
 let earth; // Declare earth variable
 
+// Get the correct URL for the earth.png image
+const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.png';
+
 // Load the Earth PNG texture
-PIXI.Assets.load('earth.png').then((texture) => {
+PIXI.Assets.load(earthImageUrl).then((texture) => {
 
     // --- Create Orbits --- 
     const orbitsContainer = new PIXI.Container();

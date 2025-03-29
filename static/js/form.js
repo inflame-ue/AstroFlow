@@ -334,14 +334,16 @@ document.addEventListener('DOMContentLoaded', function () {
               redirect: 'follow' // Allow the browser to follow redirects
           })
           .then(response => {
-              if (response.redirected) {
-                  // If the server redirected us, follow that redirect
-                  window.location.href = response.url;
-              } else if (response.ok) {
-                  // If we got an OK response but no redirect, go to simulation
-                  window.location.href = '/simulation';
-              } else {
+              if (!response.ok && !response.redirected) {
                   throw new Error(`Form submission failed: ${response.status} ${response.statusText}`);
+              }
+              
+              // Check if response is a redirect and manually navigate to simulation page
+              if (response.redirected) {
+                  window.location.href = response.url;
+              } else {
+                  // If for some reason it wasn't redirected, go to simulation anyway
+                  window.location.href = '/simulation';
               }
           })
           .catch(error => {
