@@ -269,6 +269,7 @@ class MissionPlanner:
         # Visit each orbit in sequence
         for i in range(len(sorted_orbits) - 1):
             # Service satellites in current orbit
+            # deploy a shuttle (vizualized as a blue dot) with a speed such that when the tanker reenters a shuttle has the same coordinates with the shuttles, so that they could be collected, 
             for satellite in sorted_orbits[i].satellites:
                 # In a real simulation, we'd dock with each satellite
                 pass
