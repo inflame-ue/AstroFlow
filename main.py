@@ -14,10 +14,7 @@ def index():
         if form_data:
             try:
                 data = json.loads(form_data)
-                print("Received form data:", data)
-                # store data in session for use in simulation
-                session['form_data'] = data
-
+                session['form_data'] = data # store data in session for use in simulation
                 return redirect(url_for('simulation'))
             except Exception as e:
                 print("Error processing form data:", e)
