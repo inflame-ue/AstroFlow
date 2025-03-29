@@ -62,6 +62,8 @@
 <body 
     data-earth-image-url="{{ url_for('static', filename='images/earth.png') }}"
     data-station-angles="{{ station_angles|tojson|safe }}"
+    data-satellite-angles="{{ satellite_angles|tojson|safe }}"
+    data-orbit-radii="{{ orbit_radii|tojson|safe }}"
 >
     <!-- Status messages -->
     {% if status %}
