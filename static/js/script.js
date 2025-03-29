@@ -3,9 +3,10 @@ const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
     backgroundColor: 0x000000,
-    resolution: window.devicePixelRatio || 1,
+    resolution: window.devicePixelRatio || 1,  // Use 4 for 4K resolution
     antialias: true,
     autoDensity: true,
+    
 });
 
 // Add the canvas to the container
@@ -18,7 +19,7 @@ let fuelStations = []; // Array for multiple fuel stations
 const satellites = []; // Array to hold satellite data
 
 // Scale factor: 97.84 kilometers per pixel
-const KM_TO_PIXEL_SCALE = 1 / 97.84;
+const KM_TO_PIXEL_SCALE = 1 / 15.93;
 
 // JSON data for orbits, satellites and launchpads
 const astroData = {
@@ -30,7 +31,7 @@ const astroData = {
     },
     "orbits": {
         "1": {
-            "radius": "42164",
+            "radius": "6378",
             "speed": "7.8"
         }
     },
@@ -38,7 +39,7 @@ const astroData = {
         "1": {
             "angle": "45",
             "orbitId": "1",
-            "radius": "42164",
+            "radius": "6378",
             "speed": "7.8"
         }
     }
