@@ -231,4 +231,12 @@ window.addEventListener('resize', () => {
             }
         });
     }
+    
+    // Reposition stars randomly within the new bounds
+    stars.forEach(star => {
+        if (star && star.parent) { // Check if star exists and is on stage
+            star.x = Math.random() * app.screen.width;
+            star.y = Math.random() * app.screen.height;
+        }
+    });
 });
