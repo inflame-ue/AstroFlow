@@ -10,6 +10,7 @@ import time
 # package imports
 from constants import G, EARTH_MASS, EARTH_RADIUS
 
+
 @dataclass
 class Orbit:
     radius: float  # km
