@@ -36,48 +36,13 @@ def simulation():
     # Get status parameters
     status = request.args.get('status')
     message = request.args.get('message')
-    
-    # Extract station angles from form_data
-    station_angles = [] # Default to empty list
-    try:
-        if form_data and 'launchpads' in form_data:
-            for key, launchpad_data in form_data['launchpads'].items():
-                angle = float(launchpad_data.get('angle1', 0)) # Get angle1 for each launchpad
-                station_angles.append(angle)
-    except Exception as e:
-        print(f"Error extracting station angles: {e}")
-        station_angles = [] # Fallback to empty list
-
-    # Extract satellite angles from form_data
-    satellite_angles = [] # Default to empty list
-    try:
-        if form_data and 'satellites' in form_data:
-            for key, satellite_data in form_data['satellites'].items():
-                angle = float(satellite_data.get('angle', 0)) # Get angle for each satellite
-                satellite_angles.append(angle)
-    except Exception as e:
-        print(f"Error extracting satellite angles: {e}")
-        satellite_angles = [] # Fallback to empty list
-
-    # Extract orbit radii from form_data
-    orbit_radii = [] # Default to empty list
-    try:
-        if form_data and 'orbits' in form_data:
-            for key, orbit_data in form_data['orbits'].items():
-                radius = float(orbit_data.get('radius', 0)) # Get radius for each orbit
-                orbit_radii.append(radius)
-    except Exception as e:
-        print(f"Error extracting orbit radii: {e}")
-        orbit_radii = [] # Fallback to empty list
         
     return render_template('simulation.html', 
                            form_data=form_data, 
                            status=status, 
                            message=message,
-                           # Pass angles/radii as lists (will be converted to JSON in template)
-                           station_angles=station_angles,
-                           satellite_angles=satellite_angles,
-                           orbit_radii=orbit_radii)
+                           form_data_json=json.loads(form_data)
+                           )
 
 if __name__ == '__main__':
     app.run(debug=True)

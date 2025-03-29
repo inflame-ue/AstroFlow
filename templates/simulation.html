@@ -59,12 +59,11 @@
         }
     </style>
 </head>
-<body 
+<body>
     data-earth-image-url="{{ url_for('static', filename='images/earth.svg') }}"
-    data-station-angles="{{ station_angles|tojson|safe }}"
-    data-satellite-angles="{{ satellite_angles|tojson|safe }}"
-    data-orbit-radii="{{ orbit_radii|tojson|safe }}"
->
+    data-form-status="{{ status }}"
+    <input type="hidden" id="form-data" value="{{ form_data_json | tojson | safe }}">
+    
     <!-- Status messages -->
     {% if status %}
     <div class="status-message status-{{ status }}">

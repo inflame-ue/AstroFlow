@@ -16,42 +16,15 @@ let earth;
 let orbitsContainer;
 let satellitesContainer; // Container for satellites
 let fuelStations = []; // Array for multiple fuel stations
+let orbitRadiiScaled = []; // Array to hold scaled orbit radii
 const satellites = []; // Array to hold satellite data
 
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
 
-// JSON data for orbits, satellites and launchpads
-const astroData = {
-    "launchpads": {
-        "1": {
-            "angle1": "80",
-            "angle2": ""
-        }
-    },
-    "orbits": {
-        "1": {
-            "radius": "6378",
-            "speed": "7.8"
-        }
-    },
-    "satellites": {
-        "1": {
-            "angle": "45",
-            "orbitId": "1",
-            "radius": "6378",
-            "speed": "7.8"
-        }
-    }
-};
-
-// Extract orbit data from JSON
-const orbitRadii = Object.values(astroData.orbits).map(orbit =>
-    parseFloat(orbit.radius) * KM_TO_PIXEL_SCALE
-);
-const angularSpeeds = Object.values(astroData.orbits).map(orbit =>
-    parseFloat(orbit.speed) * 0.0001 // Scale speed appropriately
-);
+const formDataElement = document.getElementById('form-data');
+const formData = JSON.parse(formDataElement.value); // Parse the JSON string
+console.log("formData", formData);
 
 // Get the correct URL for the earth.png image
 const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.svg'; // Use svg
@@ -72,7 +45,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5);
 
     // Draw orbits based on scaled JSON data
-    orbitRadii.forEach(radius => {
+    orbitRadiiScaled.forEach(radius => {
         orbitGraphics.drawCircle(0, 0, radius);
     });
     // --- End Orbits ---
@@ -84,11 +57,12 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     satellitesContainer.y = app.screen.height / 2;
 
     // Create satellites based on JSON data
-    Object.values(astroData.satellites).forEach((satData, index) => {
-        const orbitIndex = parseInt(satData.orbitId) - 1; // Convert to 0-based index
-        const radius = parseFloat(satData.radius) * KM_TO_PIXEL_SCALE;
-        const angle = parseFloat(satData.angle) * (Math.PI / 180); // Convert degrees to radians
-        const speed = parseFloat(satData.speed) * 0.0001; // Scale speed appropriately
+    Object.values(FormData).forEach((satData, index) => {
+        console.log("satData", satelliteSpeedsParsed[index], orbitRadiiScaled[index], satData);
+        const orbitIndex = parseInt(index) - 1; // Convert to 0-based index
+        const radius = parseFloat(orbitRadiiScaled[index]) * KM_TO_PIXEL_SCALE;
+        const angle = parseFloat(satData) * (Math.PI / 180); // Convert degrees to radians
+        const speed = parseFloat(satelliteSpeedsParsed[index]) * 0.0001; // Scale speed appropriately
 
         const satellite = new PIXI.Sprite(textures[satelliteImageUrl]);
         satellite.anchor.set(0.5);
