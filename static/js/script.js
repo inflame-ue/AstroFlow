@@ -19,7 +19,7 @@ let fuelStations = []; // Array for multiple fuel stations
 const satellites = []; // Array to hold satellite data
 
 // Scale factor: 97.84 kilometers per pixel
-const KM_TO_PIXEL_SCALE = 1 / 15.93;
+const KM_TO_PIXEL_SCALE = 1 / 43.05;
 
 // JSON data for orbits, satellites and launchpads
 const astroData = {
@@ -111,7 +111,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     // Create Earth sprite using the preloaded texture
     earth = new PIXI.Sprite(textures[earthImageUrl]);
     earth.anchor.set(0.5);
-    earth.scale.set(0.8);
+    earth.scale.set(0.37);
     earth.x = app.screen.width / 2;
     earth.y = app.screen.height / 2;
 
