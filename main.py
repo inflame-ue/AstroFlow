@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")  # Add a secret key for session
+app.secret_key = os.environ.get("SECRET_KEY")  # add a secret key for session with .env
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -18,10 +18,7 @@ def index():
                 return redirect(url_for('simulation'))
             except Exception as e:
                 print("Error processing form data:", e)
-        
         return redirect(url_for('simulation'))
-    
-    # for GET requests, render the form
     return render_template('form.html')
 
 @app.route('/simulation')
@@ -30,13 +27,18 @@ def simulation():
     form_data = session.get('form_data', None)
     status = request.args.get('status')
     message = request.args.get('message')
-        
+
     return render_template('simulation.html', 
                            form_data=form_data, 
                            status=status, 
                            message=message,
-                           form_data_json=json.loads(form_data)
                            )
+
+@app.route('/api/form_data')
+def get_form_data():
+    form_data = session.get('form_data')
+    return jsonify(form_data)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

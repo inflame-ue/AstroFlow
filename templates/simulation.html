@@ -56,14 +56,13 @@
             0% { opacity: 1; }
             70% { opacity: 1; }
             100% { opacity: 0; visibility: hidden; }
-        }
+        }   
     </style>
 </head>
 <body>
     data-earth-image-url="{{ url_for('static', filename='images/earth.svg') }}"
     data-form-status="{{ status }}"
-    <input type="hidden" id="form-data" value="{{ form_data_json | tojson | safe }}">
-    
+
     <!-- Status messages -->
     {% if status %}
     <div class="status-message status-{{ status }}">
