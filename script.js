@@ -9,44 +9,84 @@ const app = new PIXI.Application({
 // Add the canvas to the container
 document.getElementById('canvas-container').appendChild(app.view);
 
-let earth; // Declare earth variable
+let earth;
+let orbitsContainer;
+let satellitesContainer; // Container for satellites
+const satellites = []; // Array to hold satellite data
 
-// Load the Earth PNG texture
-PIXI.Assets.load('earth.png').then((texture) => {
+// Orbit definitions
+const orbitRadii = [300, 364, 428];
+const angularSpeeds = [0.005, 0.003, 0.002]; // Slower speeds for outer orbits (example values)
+const satelliteDistribution = [3, 3, 4]; // 3 + 3 + 4 = 10 satellites
+
+// Load textures
+PIXI.Assets.load(['earth.png', 'satellite.png']).then((textures) => {
 
     // --- Create Orbits --- 
-    const orbitsContainer = new PIXI.Container();
+    orbitsContainer = new PIXI.Container(); // Assign to global scope
     app.stage.addChild(orbitsContainer);
     
     const orbitGraphics = new PIXI.Graphics();
     orbitsContainer.addChild(orbitGraphics);
-
-    // Center orbits on the screen (where Earth will be)
     orbitsContainer.x = app.screen.width / 2;
     orbitsContainer.y = app.screen.height / 2;
-
-    const orbitRadii = [300, 364, 428]; // Decreased gap between orbits
-    orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5); // 1px white line, 50% alpha
-
+    orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5);
     orbitRadii.forEach(radius => {
         orbitGraphics.drawCircle(0, 0, radius);
     });
     // --- End Orbits ---
 
-    // Create Earth sprite once texture is loaded
-    earth = new PIXI.Sprite(texture);
-    earth.anchor.set(0.5); // Center the sprite
-    // Adjust scale as needed based on the PNG dimensions
-    earth.scale.set(0.8); // Made Earth smaller
+    // --- Create Satellites --- 
+    satellitesContainer = new PIXI.Container(); // Assign to global scope
+    app.stage.addChild(satellitesContainer);
+    satellitesContainer.x = app.screen.width / 2;
+    satellitesContainer.y = app.screen.height / 2;
 
-    // Position Earth in the center
+    let satelliteIndex = 0;
+    for (let i = 0; i < orbitRadii.length; i++) {
+        const radius = orbitRadii[i];
+        const speed = angularSpeeds[i];
+        const numSatellitesOnOrbit = satelliteDistribution[i];
+
+        for (let j = 0; j < numSatellitesOnOrbit; j++) {
+            // Use the preloaded satellite texture
+            const satellite = new PIXI.Sprite(textures['satellite.png']); 
+            satellite.anchor.set(0.5); // Center the sprite
+            satellite.scale.set(0.07); // Made satellites smaller
+            // satellite.beginFill(0xFF0000); // Red color for satellites - REMOVED
+            // satellite.drawCircle(0, 0, 5); // 5px radius - REMOVED
+            // satellite.endFill(); - REMOVED
+
+            const angle = (j / numSatellitesOnOrbit) * Math.PI * 2; // Spread satellites evenly
+            
+            // Initial position relative to container center (0,0)
+            satellite.x = radius * Math.cos(angle);
+            satellite.y = radius * Math.sin(angle);
+
+            satellitesContainer.addChild(satellite);
+            satellites.push({
+                graphics: satellite, // Now stores the sprite
+                radius: radius,
+                angle: angle,
+                speed: speed
+            });
+            satelliteIndex++;
+        }
+    }
+    // --- End Satellites ---
+
+    // Create Earth sprite using the preloaded texture
+    earth = new PIXI.Sprite(textures['earth.png']);
+    earth.anchor.set(0.5);
+    earth.scale.set(0.8);
     earth.x = app.screen.width / 2;
     earth.y = app.screen.height / 2;
 
-    app.stage.addChild(earth); // Add Earth *after* orbits container
+    // Add Earth last so it's on top of orbits and satellites
+    app.stage.addChild(earth);
 
 }).catch((error) => {
-    console.error('Error loading Earth PNG asset:', error);
+    console.error('Error loading assets:', error);
     // Create a fallback circle if PNG loading fails
     const fallbackEarth = new PIXI.Graphics();
     fallbackEarth.beginFill(0x4287f5); // Blue fallback
@@ -75,29 +115,40 @@ for (let i = 0; i < numStars; i++) {
 }
 
 // Animation loop
-app.ticker.add(() => {
+app.ticker.add((delta) => { // Pass delta for potential frame-rate independent movement later
+    // Animate Stars
     stars.forEach(star => {
         star.alpha = Math.random();
     });
     
-    // Add a subtle rotation to Earth (check if earth exists)
-    if (earth && earth.parent) { // Check if earth is loaded and added to stage
+    // Rotate Earth
+    if (earth && earth.parent) {
         earth.rotation += 0.001;
     }
+
+    // Animate Satellites
+    satellites.forEach(sat => {
+        sat.angle += sat.speed; // Increment angle by speed
+        sat.graphics.x = sat.radius * Math.cos(sat.angle);
+        sat.graphics.y = sat.radius * Math.sin(sat.angle);
+    });
 });
 
-// Handle window resize
+// Handle window resize (adjust orbits and satellites containers)
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
-    // Reposition Earth after resize (check if earth exists)
+    const centerX = app.screen.width / 2;
+    const centerY = app.screen.height / 2;
     if (earth && earth.parent) {
-        earth.x = app.screen.width / 2;
-        earth.y = app.screen.height / 2;
-        // Also reposition orbits container
-        const orbitsContainer = app.stage.getChildAt(0); // Assuming it's the first child
-        if (orbitsContainer) {
-             orbitsContainer.x = app.screen.width / 2;
-             orbitsContainer.y = app.screen.height / 2;
-        }
+        earth.x = centerX;
+        earth.y = centerY;
+    }
+    if (orbitsContainer && orbitsContainer.parent) {
+         orbitsContainer.x = centerX;
+         orbitsContainer.y = centerY;
+    }
+    if (satellitesContainer && satellitesContainer.parent) {
+         satellitesContainer.x = centerX;
+         satellitesContainer.y = centerY;
     }
 }); 
