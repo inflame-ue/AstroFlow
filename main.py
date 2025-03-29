@@ -27,11 +27,13 @@ def simulation():
     form_data = session.get('form_data', None)
     status = request.args.get('status')
     message = request.args.get('message')
-    
+        
     return render_template('simulation.html', 
                            form_data=form_data, 
                            status=status, 
-                           message=message)
+                           message=message,
+                           form_data_json=json.loads(form_data)
+                           )
 
 if __name__ == '__main__':
     app.run(debug=True)
