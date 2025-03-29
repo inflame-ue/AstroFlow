@@ -54,9 +54,9 @@ const angularSpeeds = Object.values(astroData.orbits).map(orbit =>
 );
 
 // Get the correct URL for the earth.png image
-const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.png';
+const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.svg'; // Use svg
 const satelliteImageUrl = '/static/images/satellite.png'; // Define path
-const gasStationImageUrl = '/static/images/gas_station.png'; // Define path
+const gasStationImageUrl = '/static/images/gas_station.svg'; // Define path - Use svg
 
 // Load all textures
 PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((textures) => {
@@ -134,7 +134,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
     
     stationAngles.forEach(stationAngleDegrees => {
         const fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]);
-        fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
+        fuelStation.anchor.set(0.5, 0.55); // Anchor at center
         fuelStation.scale.set(0.06); // Make it smaller again
         fuelStation.angleData = stationAngleDegrees; // Store angle on the sprite itself
         
@@ -144,6 +144,7 @@ PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((t
         
         fuelStation.x = earth.x + earthRadius * Math.cos(stationAngleRadians);
         fuelStation.y = earth.y + earthRadius * Math.sin(stationAngleRadians); 
+        // Keep rotation pointing outwards if desired, or remove if dot shouldn't rotate
         fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
         
         app.stage.addChild(fuelStation);
