@@ -15,11 +15,18 @@ let satellitesContainer; // Container for satellites
 let fuelStation; // Graphics for the fuel station
 const satellites = []; // Array to hold satellite data
 
+// Orbit definitions (Re-added after merge)
+const orbitRadii = [300, 364, 428];
+const angularSpeeds = [0.005, 0.003, 0.002]; // Slower speeds for outer orbits (example values)
+const satelliteDistribution = [3, 3, 4]; // 3 + 3 + 4 = 10 satellites
+
 // Get the correct URL for the earth.png image
 const earthImageUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.png';
+const satelliteImageUrl = '/static/images/satellite.png'; // Define path
+const gasStationImageUrl = '/static/images/gas_station.png'; // Define path
 
-// Load the Earth PNG texture
-PIXI.Assets.load(earthImageUrl).then((texture) => {
+// Load all textures
+PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl]).then((textures) => {
 
     // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container(); // Assign to global scope
@@ -49,7 +56,7 @@ PIXI.Assets.load(earthImageUrl).then((texture) => {
 
         for (let j = 0; j < numSatellitesOnOrbit; j++) {
             // Use the preloaded satellite texture
-            const satellite = new PIXI.Sprite(textures['satellite.png']); 
+            const satellite = new PIXI.Sprite(textures[satelliteImageUrl]); // Use variable path 
             satellite.anchor.set(0.5); // Center the sprite
             satellite.scale.set(0.07); // Made satellites smaller
             // satellite.beginFill(0xFF0000); // Red color for satellites - REMOVED
@@ -75,7 +82,7 @@ PIXI.Assets.load(earthImageUrl).then((texture) => {
     // --- End Satellites ---
 
     // Create Earth sprite using the preloaded texture
-    earth = new PIXI.Sprite(textures['earth.png']);
+    earth = new PIXI.Sprite(textures[earthImageUrl]);
     earth.anchor.set(0.5);
     earth.scale.set(0.8);
     earth.x = app.screen.width / 2;
@@ -85,7 +92,7 @@ PIXI.Assets.load(earthImageUrl).then((texture) => {
     app.stage.addChild(earth);
 
     // --- Create Fuel Station Sprite ---
-    fuelStation = new PIXI.Sprite(textures['gas_station.png']);
+    fuelStation = new PIXI.Sprite(textures[gasStationImageUrl]); // Use variable path
     fuelStation.anchor.set(0.5, 1); // Anchor at bottom-center
     fuelStation.scale.set(0.06); // Make it smaller again
     
