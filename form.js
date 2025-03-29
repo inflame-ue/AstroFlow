@@ -320,4 +320,40 @@ document.addEventListener('DOMContentLoaded', function () {
           alert("An error occurred while processing the form. Please check the console for details.");
       }
   });
+
+  const formContainer = document.querySelector('.form-container');
+  const toggleBar = document.querySelector('.toggle-bar');
+
+  // Hide form on submit
+  satelliteForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      
+      // Process form data here
+      updateSummary();
+      
+      // Hide form and show toggle bar
+      formContainer.classList.add('hidden');
+      toggleBar.classList.add('visible');
+  });
+
+  // Show form when clicking the toggle bar
+  toggleBar.addEventListener('click', function() {
+      formContainer.classList.remove('hidden');
+      toggleBar.classList.remove('visible');
+  });
+
+  // Function to update the summary content
+  function updateSummary() {
+      const summaryContent = document.getElementById('summaryContent');
+      
+      // Here you can populate the summary based on form data
+      // For example:
+      // const formData = new FormData(satelliteForm);
+      // let summaryHTML = '<div class="summary-item">';
+      // for (let [key, value] of formData.entries()) {
+      //     summaryHTML += `<p><strong>${key}:</strong> ${value}</p>`;
+      // }
+      // summaryHTML += '</div>';
+      // summaryContent.innerHTML = summaryHTML;
+  }
 });
