@@ -145,7 +145,7 @@ def simulation():
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
             }
-            
+                        
             # write simulation results to file
             with open('simulation_results.json', 'w') as f:
                 json.dump(simulation_results, f)
