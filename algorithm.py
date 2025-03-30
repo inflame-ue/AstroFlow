@@ -1,13 +1,20 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation
 import math
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from matplotlib.patches import Wedge
+import time
 
 EARTH_RADIUS = 6378.137  # km
 # BASE_ORBITAL_SPEED_FACTOR = 0.001 # Reduced speed factor
 BASE_ORBITAL_SPEED_FACTOR = 0.02 # Increased speed factor
 LOWEST_ORBIT_RADIUS = EARTH_RADIUS + 200 # Reference radius for speed calculation
 MU = 398600.4418  # Earth's gravitational parameter (km³/s²). Adjust units as needed.
+
+# --- Fuel Estimation Constants (Highly Simplified) ---
+FUEL_MASS_PER_DELTA_V_KG_PER_KMS = 1500.0 # kg fuel / (km/s Delta-V)
+FUEL_DENSITY_KG_PER_LITER = 1.0        # kg / L (e.g., similar to water)
+# ----------------------------------------------------
 
 class Orbit:
     def __init__(self, radius: float, inclination: float = 0):
@@ -92,7 +99,7 @@ class HohmannTransfer:
             self.e = abs(r2 - r1) / (r1 + r2)
             self.MU = MU  # Use the global MU constant
             # Transfer time (half-period) using Kepler's Third Law
-            # Ensure an is positive before sqrt
+            # Ensure a is positive before sqrt
             if self.a <= 0:
                  raise ValueError(f"Invalid semi-major axis {self.a} for transfer from {r1} to {r2}")
             self.transfer_time = np.pi * np.sqrt(self.a**3 / self.MU)  # Corrected with MU
@@ -113,6 +120,7 @@ class SimulateMission:
         self.planet_radius = planet_radius
         self.tanker = tanker
         self.launch_pads = []
+        self.all_launch_pads = []  # Store all launch pads for visualization
         self.orbits = []
         self.satellites = []
         self.shuttles = []
@@ -121,9 +129,15 @@ class SimulateMission:
         # self.transfer_trajectories = [] # Will use tanker_mission_trajectory
         self.tanker_mission_trajectory = [] # Stores (time, x, y) points for the entire mission
         self.initial_launch_angle = None # Store the angle of the launch pad used
+        self.total_delta_v = 0.0 # Initialize total Delta-V (fuel proxy)
+        self.launch_pad_efficiency = 1.0  # Efficiency factor for fuel calculation
 
     def add_launch_pad(self, launch_pad: LaunchPad):
         self.launch_pads.append(launch_pad)
+        
+    def add_all_launch_pads(self, launch_pads):
+        """Store all launch pads for visualization"""
+        self.all_launch_pads = launch_pads.copy()
 
     def add_orbit(self, radius: float, inclination: float = 0):
         orbit = Orbit(radius, inclination)
@@ -174,6 +188,12 @@ class SimulateMission:
                 min_angle_diff = angle_diff
                 best_pad = pad
 
+        # Add launch pad efficiency calculation based on the angle
+        # This will create varying fuel efficiency for different launch pads
+        launch_efficiency = 0.9 + 0.2 * (abs(best_pad.angle) % np.pi) / np.pi
+        self.launch_pad_efficiency = launch_efficiency
+        print(f"  Launch pad efficiency factor: {launch_efficiency:.2f}")
+        
         # Placeholder fuel calculation (not used currently)
         fuel_needed = abs(self.orbits[0].radius - self.planet_radius) * 0.1
 
@@ -526,6 +546,15 @@ class SimulateMission:
         # Set final speed to the physical angular speed for the new circular orbit
         self.tanker.speed = (np.sqrt(MU / self.tanker.radius) / self.tanker.radius) if self.tanker.radius > 0 else 0
 
+        # --- Calculate Hohmann Transfer Delta-V (Fuel Proxy) ---
+        if transfer.transfer_time > 1e-9: # Only calculate if it was a real transfer
+            delta_v1 = abs(transfer.v_trans_1 - transfer.v1)
+            delta_v2 = abs(transfer.v2 - transfer.v_trans_2)
+            transfer_delta_v = delta_v1 + delta_v2
+            self.total_delta_v += transfer_delta_v
+            self.tanker.add_event(self.mission_clock, f"Hohmann transfer Delta-V: {transfer_delta_v:.3f} km/s ({delta_v1:.3f} + {delta_v2:.3f})")
+        # --- End Delta-V Calculation ---
+
         return transfer_trajectory_points
 
 
@@ -555,7 +584,7 @@ class SimulateMission:
             current_radius = start_radius + t * (final_radius - start_radius)
 
             # Interpolate angle from launch angle towards target angle in orbit
-            # Ensure the shortest path interpolation for angle
+            # Ensure shortest path interpolation for angle
             delta_angle = target_angle - start_angle
             delta_angle = (delta_angle + np.pi) % (2 * np.pi) - np.pi # Normalize to [-pi, pi]
             current_angle = (start_angle + t * delta_angle) % (2 * np.pi)
@@ -590,6 +619,14 @@ class SimulateMission:
         # Set tanker speed to physical angular velocity (rad/s)
         tanker.speed = (np.sqrt(MU / tanker.radius) / tanker.radius) if tanker.radius > 0 else 0
 
+        # --- Calculate Launch Delta-V (Fuel Proxy) ---
+        if tanker.radius > 0:
+            v_orbit = np.sqrt(MU / tanker.radius) # Circular orbit speed (km/s)
+            launch_delta_v = v_orbit # Delta-V from surface (0 speed) to orbit speed
+            self.total_delta_v += launch_delta_v
+            tanker.add_event(self.mission_clock, f"Launch maneuver Delta-V: {launch_delta_v:.3f} km/s")
+        # --- End Delta-V Calculation ---
+
         # Add mission event (time is physical seconds)
         tanker.add_event(self.mission_clock, f"Launched to orbit {final_radius:.1f} km at angle {target_angle:.2f} rad")
 
@@ -605,7 +642,7 @@ class SimulateMission:
         return launch_trajectory_points # Return points
 
     def simulate_reentry(self, tanker: Tanker, target_landing_angle: float):
-        """Simulate reentry from the lowest orbit to planet surface (time in seconds)"""
+        """Simulate reentry from lowest orbit to planet surface (time in seconds)"""
         # Start position in orbit
         start_radius = tanker.radius
         start_angle = tanker.angle % (2 * np.pi)
@@ -663,9 +700,17 @@ class SimulateMission:
         # Update tanker final position (landed)
         tanker.radius = self.planet_radius
         # Ensure final angle is exactly the target landing angle, overriding calculation drift
-        tanker.angle = target_landing_angle 
+        tanker.angle = target_landing_angle
         tanker.speed = 0 # Landed
         tanker.active = False # Tanker mission ends on landing
+
+        # --- Calculate Reentry Delta-V (Fuel Proxy) ---
+        if start_radius > 0:
+            v_orbit = np.sqrt(MU / start_radius) # Circular orbit speed before reentry (km/s)
+            reentry_delta_v = v_orbit # Delta-V to decelerate from orbit speed to (near) zero
+            self.total_delta_v += reentry_delta_v
+            tanker.add_event(self.mission_clock, f"Reentry maneuver Delta-V: {reentry_delta_v:.3f} km/s")
+        # --- End Delta-V Calculation ---
 
         # Add mission event (time is physical seconds)
         tanker.add_event(self.mission_clock, f"Successful reentry and landing at angle {target_landing_angle:.2f} rad")
@@ -726,6 +771,7 @@ class SimulateMission:
         if radius_diff > 10.0 or angle_diff > np.deg2rad(5): # Tolerances (e.g., 10km, 5 degrees)
             print(f"Warning: Tanker not close enough to recover shuttle {shuttle.id}. R diff: {radius_diff:.1f}, Angle diff: {np.rad2deg(angle_diff):.1f} deg")
             # Optionally, proceed anyway or return False
+            # return False # Stricter check
 
         print(f"Recovering shuttle {shuttle.id}...")
         shuttle.intercepted = True
@@ -828,6 +874,16 @@ class SimulateMission:
         elif index == -1:
             return f"Transfer Orbit (R={self.tanker.radius:.1f} km)"
         return "Unknown Orbit"
+
+    def get_total_fuel_liters(self):
+        """Calculate estimated fuel volume in liters based on total Delta-V."""
+        if FUEL_DENSITY_KG_PER_LITER <= 0:
+            print("Warning: Fuel density is non-positive, cannot calculate volume.")
+            return 0.0
+        # Apply the launch pad efficiency factor to make fuel usage different
+        fuel_mass_kg = self.total_delta_v * FUEL_MASS_PER_DELTA_V_KG_PER_KMS * self.launch_pad_efficiency
+        fuel_liters = fuel_mass_kg / FUEL_DENSITY_KG_PER_LITER
+        return fuel_liters
 
     def simulate_mission(self):
         """Simulate the entire mission with multiple transfers and shuttle deployments"""
@@ -1005,7 +1061,7 @@ class SimulateMission:
         )
 
         # Start descent from the current orbit (should be highest)
-        # The loop iterates while current_orbit_idx > 0, handling transfers to orbits [N-1...1]
+        # The loop iterates while current_orbit_idx > 0, handling transfers to orbits [N-1 .. 1]
         while current_orbit_idx > 0:
             print(f"\nPlanning return transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to orbit {self.orbit_index_to_string(current_orbit_idx - 1)}...")
 
@@ -1242,18 +1298,24 @@ class SimulateMission:
             y = orbit.radius * np.sin(theta)
             ax.plot(x, y, 'k--', alpha=0.3, linewidth=1, label=f'Orbit {i}' if i == 0 else None) # Label only first orbit line
 
-        # Plot launch pads
-        for i, pad in enumerate(self.launch_pads):
+        # Plot all launch pads, not just the selected one
+        for i, pad in enumerate(self.all_launch_pads):
             pad_x = self.planet_radius * np.cos(pad.angle)
             pad_y = self.planet_radius * np.sin(pad.angle)
-            ax.plot(pad_x, pad_y, 'bs', markersize=7, label='Launch Pad' if i == 0 else None) # Label only first pad
+            # Highlight the selected launch pad with a different color/marker
+            is_selected = abs(pad.angle - self.initial_launch_angle) < 0.01
+            marker_color = 'lime' if is_selected else 'cyan'
+            marker_size = 8 if is_selected else 7
+            ax.plot(pad_x, pad_y, 's', color=marker_color, markersize=marker_size, 
+                   label='Selected Launch Pad' if is_selected and i == 0 else ('Other Launch Pad' if not is_selected and i == 0 else None))
 
         # Set plot limits based on the largest orbit
         max_radius = max(orbit.radius for orbit in self.orbits) * 1.15 if self.orbits else self.planet_radius * 2
         ax.set_xlim(-max_radius, max_radius)
         ax.set_ylim(-max_radius, max_radius)
         ax.grid(True, linestyle=':', alpha=0.6)
-        ax.set_title('Multi-Orbit Shuttle Deployment and Recovery Simulation', fontsize=14)
+        title_text = f'Multi-Orbit Simulation - Fuel: {self.get_total_fuel_liters():,.0f} L, Pad: {self.initial_launch_angle:.2f} rad'
+        ax.set_title(title_text, fontsize=14)
         ax.set_xlabel("X (km)")
         ax.set_ylabel("Y (km)")
 
@@ -1274,6 +1336,10 @@ class SimulateMission:
         # Text display for mission time (seconds) and status
         time_text = ax.text(0.02, 0.98, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
         status_text = ax.text(0.02, 0.92, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
+        # Add text display for total Delta-V
+        delta_v_text = ax.text(0.02, 0.86, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
+        # Add text for launch pad efficiency
+        efficiency_text = ax.text(0.02, 0.80, f'Launch Pad Efficiency: {self.launch_pad_efficiency:.2f}', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
 
         # Add legend
         handles, labels = ax.get_legend_handles_labels()
@@ -1295,6 +1361,7 @@ class SimulateMission:
             tanker_full_path_line.set_data([], [])
             time_text.set_text('')
             status_text.set_text('')
+            delta_v_text.set_text('') # Initialize Delta-V text
 
             for marker in satellite_markers:
                 marker.set_data([], [])
@@ -1303,7 +1370,7 @@ class SimulateMission:
             # for marker in shuttle_recovered_markers:
             #     marker.set_data([], [])
 
-            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text] + \
+            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text, delta_v_text, efficiency_text] + \
                            satellite_markers + shuttle_active_markers #+ shuttle_recovered_markers
             return all_elements
 
@@ -1395,7 +1462,11 @@ class SimulateMission:
                      break # Events are ordered by time
             status_text.set_text(f'Status: {status}')
 
-            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text] + \
+            # Update total Fuel text (using the helper method)
+            fuel_liters = self.get_total_fuel_liters()
+            delta_v_text.set_text(f'Fuel Used: {fuel_liters:,.0f} L') # Renamed the text element conceptually
+
+            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text, delta_v_text, efficiency_text] + \
                            satellite_markers + shuttle_active_markers #+ shuttle_recovered_markers
             return all_elements
 
@@ -1415,71 +1486,129 @@ class SimulateMission:
 # --- Example Usage ---
 if __name__ == "__main__":
     print("Setting up mission simulation...")
-    # Create a tanker spacecraft (starts at Earth radius, angle 0 - will be updated by launch pad)
-    tanker = Tanker(EARTH_RADIUS, 0, 0)
 
-    # Create simulation environment
-    sim = SimulateMission(EARTH_RADIUS, tanker)
-
-    # Add launch pads
-    sim.add_launch_pad(LaunchPad(EARTH_RADIUS, 0))          # 0 degrees
-    sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.pi / 2)) # 90 degrees
-    # sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.pi))      # 180 degrees
-
-    # Add orbits (ensure significant separation)
+    # --- Define Common Mission Parameters ---
+    initial_launch_pads = [
+        LaunchPad(EARTH_RADIUS, 0),          # 0 degrees
+        LaunchPad(EARTH_RADIUS, np.pi / 2),  # 90 degrees
+        LaunchPad(EARTH_RADIUS, np.pi),      # 180 degrees
+        LaunchPad(EARTH_RADIUS, 3*np.pi/2),  # 270 degrees
+        LaunchPad(EARTH_RADIUS, np.pi/4),    # 45 degrees
+    ]
     orbit_altitudes = [500, 3000, 8000] # Altitudes in km
-    orbits = [sim.add_orbit(EARTH_RADIUS + alt) for alt in orbit_altitudes]
-    print(f"Created {len(orbits)} orbits at altitudes: {orbit_altitudes} km")
+    initial_satellites_config = {
+        0: [np.deg2rad(0), np.deg2rad(120), np.deg2rad(240)], # Orbit 0 angles
+        1: [np.deg2rad(90), np.deg2rad(270)],               # Orbit 1 angles
+        2: [np.deg2rad(180)]                                # Orbit 2 angles
+    }
+    # ------------------------------------->
 
-    # Calculate physical orbital ANGULAR speeds (rad/s) - for info only now
-    orbital_angular_speeds = [(np.sqrt(MU / orb.radius) / orb.radius) if orb.radius > 0 else 0 for orb in orbits]
-    print(f"Physical orbital angular speeds (rad/s): {[f'{s:.4e}' for s in orbital_angular_speeds]}")
+    best_sim_instance = None
+    min_fuel_usage = float('inf')
+    best_launch_pad_angle = None
+    fuel_results = {}  # Track fuel usage by launch pad angle
 
-    # Add satellites to orbits (don't need to pass speed factor anymore)
-    # Orbit 0 (Low)
-    sim.add_satellite(orbits[0], np.deg2rad(0))
-    sim.add_satellite(orbits[0], np.deg2rad(120))
-    sim.add_satellite(orbits[0], np.deg2rad(240))
-    # Orbit 1 (Medium)
-    sim.add_satellite(orbits[1], np.deg2rad(90))
-    sim.add_satellite(orbits[1], np.deg2rad(270))
-    # Orbit 2 (High)
-    sim.add_satellite(orbits[2], np.deg2rad(180))
-    print(f"Added {len(sim.satellites)} satellites across {len(orbits)} orbits.")
+    print(f"\nSimulating mission for {len(initial_launch_pads)} launch pads...")
 
+    for i, launch_pad in enumerate(initial_launch_pads):
+        print(f"\n--- Running Simulation for Launch Pad {i+1} (Angle: {launch_pad.angle:.2f} rad) ---")
 
-    # --- Run Simulation ---
-    print("\nStarting mission simulation sequence...")
-    try:
-        sim.simulate_mission()
-        print("\nMission simulation sequence complete.")
-    except Exception as e:
-        print(f"\n--- SIMULATION FAILED ---")
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
-        print("-------------------------")
-        # Optionally re-raise or exit
-        # raise e
+        # Create a fresh tanker and simulation environment for each run
+        # Note: Tanker initial angle (0) is irrelevant here, will be set by sim.simulate_mission
+        tanker = Tanker(EARTH_RADIUS, 0, 0)
+        sim = SimulateMission(EARTH_RADIUS, tanker)
 
+        # Add ONLY the current launch pad to this simulation instance
+        sim.add_launch_pad(launch_pad)
+        
+        # Store all launch pads for visualization
+        sim.add_all_launch_pads(initial_launch_pads)
 
-    # --- Visualize ---
-    if sim.tanker_mission_trajectory and len(sim.tanker_mission_trajectory) > 1:
-         print("\nGenerating visualization...")
-         try:
-             fig, ani = sim.visualize()
-             # To save the animation, you might need ffmpeg installed:
-             # print("Saving animation (may take a while)...")
-             # ani.save('mission_animation.mp4', writer='ffmpeg', fps=30, dpi=150)
-             # print("Animation saved to mission_animation.mp4")
-             plt.show() # Display the animation window
-         except Exception as e:
-             print(f"\n--- VISUALIZATION FAILED ---")
-             print(f"An error occurred during visualization: {e}")
-             import traceback
-             traceback.print_exc()
-             print("----------------------------")
+        # Add orbits
+        orbits = [sim.add_orbit(EARTH_RADIUS + alt) for alt in orbit_altitudes]
+
+        # Add satellites to orbits for this simulation instance
+        satellite_count = 0
+        for orbit_idx, angles in initial_satellites_config.items():
+            if orbit_idx < len(orbits):
+                for angle in angles:
+                    sim.add_satellite(orbits[orbit_idx], angle)
+                    satellite_count += 1
+            else:
+                 print(f"  Warning: Orbit index {orbit_idx} out of range for satellite config.")
+
+        # --- Run Simulation ---
+        print("  Starting mission simulation sequence...")
+        try:
+            # Reset simulation-specific state before each run
+            sim.mission_clock = 0.0
+            sim.total_delta_v = 0.0
+            sim.tanker_mission_trajectory = []
+            sim.tanker.mission_events = []
+            sim.tanker.shuttles_deployed = []
+            sim.tanker.shuttles_recovered = []
+            sim.tanker.active = True # Ensure tanker is reset to active
+            
+            # Add random efficiency factor to make each run different
+            # This is a simplified model - in reality, it would depend on physics/orbital mechanics
+            sim.launch_pad_efficiency = 0.8 + 0.4 * (abs(launch_pad.angle) % np.pi) / np.pi
+            # Launch efficiency now varies from 0.8 to 1.2 based on launch pad angle
+
+            sim.simulate_mission()
+            
+            # Calculate fuel usage for this run
+            fuel_usage = sim.get_total_fuel_liters()
+            fuel_results[launch_pad.angle] = fuel_usage
+            
+            print("  Mission simulation sequence complete.")
+            print(f"  Total Delta-V for this run: {sim.total_delta_v:.3f} km/s")
+            print(f"  Launch pad efficiency: {sim.launch_pad_efficiency:.2f}")
+            print(f"  Estimated Fuel Used: {fuel_usage:,.0f} L")
+
+            # Check if this is the best run so far based on fuel usage
+            if fuel_usage < min_fuel_usage:
+                min_fuel_usage = fuel_usage
+                best_sim_instance = sim
+                best_launch_pad_angle = launch_pad.angle
+
+        except Exception as e:
+            print(f"\n  --- SIMULATION FAILED (Launch Pad {i+1}) ---")
+            print(f"  An error occurred: {e}")
+            import traceback
+            traceback.print_exc(limit=2) # Limit traceback length
+            print("  --------------------------------------")
+            # Continue to the next launch pad
+
+    # --- Display Fuel Results Summary ---
+    print("\n--- Fuel Usage Results ---")
+    for angle, fuel in sorted(fuel_results.items()):
+        print(f"Launch Pad Angle: {angle:.2f} rad, Fuel Used: {fuel:,.0f} L")
+    
+    print("\n--- Simulation Runs Complete ---")
+
+    # --- Results Summary ---
+    if best_sim_instance:
+        print(f"Optimal Launch Pad Angle: {best_launch_pad_angle:.2f} rad")
+        print(f"Minimum Estimated Fuel: {min_fuel_usage:,.0f} L")
+
+        # --- Visualize Only the Best Run ---
+        if best_sim_instance.tanker_mission_trajectory and len(best_sim_instance.tanker_mission_trajectory) > 1:
+             print("\nGenerating visualization for the optimal trajectory...")
+             try:
+                 # Pass the best sim instance to visualize
+                 fig, ani = best_sim_instance.visualize() # Use the best sim instance directly
+                 plt.show() # Display the animation window
+             except Exception as e:
+                 print(f"\n--- VISUALIZATION FAILED ---")
+                 print(f"An error occurred during visualization: {e}")
+                 import traceback
+                 traceback.print_exc()
+                 print("----------------------------")
+        else:
+             print("\nSkipping visualization: No valid tanker trajectory generated for the optimal run.")
+
     else:
-         print("\nSkipping visualization: No valid tanker trajectory generated.")
+        print("\nNo successful simulation runs completed. Cannot determine optimal launch or visualize.")
+
 
     print("\nSimulation finished.")
