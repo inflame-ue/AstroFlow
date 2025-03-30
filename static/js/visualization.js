@@ -2,9 +2,28 @@
 import { app, globals, imageUrls } from './app.js';
 
 export function createVisualization(textures) {
+    // Check if device is a phone (screen width less than 768px)
+    const isPhone = window.innerWidth < 768;
+    const scaleFactor = isPhone ? 1 / 1.7 : 1; // Make 1.7x smaller on phone
+    
+    console.log(`Device detected as ${isPhone ? 'phone' : 'desktop'}, using scale: ${scaleFactor}`);
+    
+    // Create a main container for all visualization elements
+    globals.visualizationContainer = new PIXI.Container();
+    globals.visualizationContainer.scale.set(scaleFactor);
+    globals.visualizationContainer.position.set(
+        app.screen.width / 2, 
+        app.screen.height / 2
+    );
+    globals.visualizationContainer.pivot.set(
+        app.screen.width / 2, 
+        app.screen.height / 2
+    );
+    app.stage.addChild(globals.visualizationContainer);
+    
     // --- Create Orbits ---
     globals.orbitsContainer = new PIXI.Container();
-    app.stage.addChild(globals.orbitsContainer);
+    globals.visualizationContainer.addChild(globals.orbitsContainer);
 
     const orbitGraphics = new PIXI.Graphics();
     globals.orbitsContainer.addChild(orbitGraphics);
@@ -19,7 +38,7 @@ export function createVisualization(textures) {
 
     // --- Create Satellites ---
     globals.satellitesContainer = new PIXI.Container();
-    app.stage.addChild(globals.satellitesContainer);
+    globals.visualizationContainer.addChild(globals.satellitesContainer);
     globals.satellitesContainer.x = app.screen.width / 2;
     globals.satellitesContainer.y = app.screen.height / 2;
 
@@ -31,6 +50,11 @@ export function createVisualization(textures) {
 }
 
 function createSatellites(textures) {
+    globals.satellitesContainer = new PIXI.Container();
+    globals.visualizationContainer.addChild(globals.satellitesContainer);
+    globals.satellitesContainer.x = app.screen.width / 2;
+    globals.satellitesContainer.y = app.screen.height / 2;
+
     if (globals.simData && globals.simData.satellites) {
         Object.entries(globals.simData.satellites).forEach(([satId, satData]) => {
             const orbitId = satData.orbitId;
@@ -65,7 +89,7 @@ function createEarth(textures) {
     globals.earth.scale.set(0.37);
     globals.earth.x = app.screen.width / 2;
     globals.earth.y = app.screen.height / 2;
-    app.stage.addChild(globals.earth);
+    globals.visualizationContainer.addChild(globals.earth);
 }
 
 function createFuelStations(textures) {
@@ -90,7 +114,7 @@ function createFuelStations(textures) {
                 fuelStation.y = globals.earth.y + earthRadius * Math.sin(stationAngleRadians);
                 fuelStation.rotation = stationAngleRadians + Math.PI / 2;
                 
-                app.stage.addChild(fuelStation);
+                globals.visualizationContainer.addChild(fuelStation);
                 globals.fuelStations.push(fuelStation);
             }
         });
@@ -144,7 +168,7 @@ function createRocket(textures) {
         globals.flameTrailContainer.destroy();
     }
     globals.flameTrailContainer = new PIXI.Container();
-    app.stage.addChild(globals.flameTrailContainer);
+    globals.visualizationContainer.addChild(globals.flameTrailContainer);
     
     globals.rocket = new PIXI.Sprite(textures[imageUrls.rocket]);
     globals.rocket.anchor.set(0.5);
@@ -165,7 +189,7 @@ function createRocket(textures) {
         globals.rocket.visible = false;
     }
     
-    app.stage.addChild(globals.rocket);
+    globals.visualizationContainer.addChild(globals.rocket);
     console.log("Rocket created at:", globals.rocket.x, globals.rocket.y);
 }
 
