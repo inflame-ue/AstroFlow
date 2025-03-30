@@ -1,3 +1,53 @@
+// Create the PixiJS application
+const app = new PIXI.Application({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    backgroundColor: 0x000000,
+    resolution: window.devicePixelRatio || 1,  // Use 4 for 4K resolution
+    antialias: true,
+    autoDensity: true,
+});
+
+// Append the Pixi canvas to the dedicated background div
+document.getElementById('pixi-background').appendChild(app.view);
+
+// --- Starry Background Logic --- 
+const stars = [];
+const numStars = 200;
+
+for (let i = 0; i < numStars; i++) {
+    const star = new PIXI.Graphics();
+    star.beginFill(0xFFFFFF);
+    star.drawCircle(0, 0, Math.random() * 2);
+    star.endFill();
+
+    star.x = Math.random() * app.screen.width;
+    star.y = Math.random() * app.screen.height;
+
+    stars.push(star);
+    app.stage.addChild(star);
+}
+
+// Animation loop for stars
+app.ticker.add((delta) => {
+    stars.forEach(star => {
+        star.alpha = Math.random(); // Twinkle effect
+    });
+});
+
+// Handle window resize for stars
+window.addEventListener('resize', () => {
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    // Reposition stars randomly within the new bounds
+    stars.forEach(star => {
+        if (star && star.parent) { 
+            star.x = Math.random() * app.screen.width;
+            star.y = Math.random() * app.screen.height;
+        }
+    });
+});
+// --- End Starry Background Logic --- 
+
 document.addEventListener('DOMContentLoaded', function () {
   const launchpadsContainer = document.getElementById('launchpadsContainer');
   const orbitsContainer = document.getElementById('orbitsContainer');
