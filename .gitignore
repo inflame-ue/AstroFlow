@@ -189,3 +189,6 @@ fabric.properties
 
 # simulation results
 simulation_results.json
+
+# os specific
+.DS_Store
