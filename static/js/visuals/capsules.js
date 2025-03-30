@@ -94,62 +94,24 @@ export function animateCapsules(delta) {
     const centerX = app.screen.width / 2;
     const centerY = app.screen.height / 2;
 
-    // Use for...i loop so we can remove items while iterating
-    for (let i = capsules.length - 1; i >= 0; i--) {
-        const capsule = capsules[i];
-        if (!capsule || !capsule.parent) {
-            // Remove invalid capsules
-            capsules.splice(i, 1);
-            continue;
+    capsules.forEach((capsule) => {
+        if (!capsule || !capsule.parent) return; // Check if valid
+
+        // Set final scale and alpha immediately if not already set
+        if (capsule.scale.x !== 0.03) { 
+             capsule.scale.set(0.03);
+             capsule.alpha = 1;
         }
 
-        if (capsule.retrieving) {
-            // Handle retrieval animation
-            const retrievalTime = Date.now() - capsule.retrievalStartTime;
-            const animationDuration = 1500; // 1.5 seconds
-            
-            if (retrievalTime >= animationDuration) {
-                // Retrieval animation complete - remove capsule
-                console.log(`Capsule from orbit ${capsule.orbitIndex} retrieval complete`);
-                capsulesContainer.removeChild(capsule);
-                capsule.destroy();
-                capsules.splice(i, 1);
-                deployedOrbits.delete(capsule.orbitIndex);
-                continue;
-            }
-            
-            // Animation progress from 0 to 1
-            const progress = retrievalTime / animationDuration;
-            
-            // Shrink and fade out
-            capsule.scale.set(0.03 * (1 - progress)); // Scale from 0.03 to 0
-            capsule.alpha = 1 - progress; // Alpha from 1 to 0
-            
-            // Get rocket position for flight animation
-            const rocketSprite = window.getRocketSprite ? window.getRocketSprite() : null;
-            
-            if (rocketSprite) {
-                // Move toward rocket with easing
-                capsule.x = capsule.originalX + (rocketSprite.x - capsule.originalX) * progress;
-                capsule.y = capsule.originalY + (rocketSprite.y - capsule.originalY) * progress;
-            }
-        } 
-        else {
-            // Normal orbit animation - unchanged
-            // Set final scale and alpha if not already set
-            if (capsule.scale.x !== 0.03) { 
-                capsule.scale.set(0.03);
-                capsule.alpha = 1;
-            }
+        // Animate Orbit
+        capsule.angle += capsule.speed * delta;
 
-            // Animate Orbit
-            capsule.angle += capsule.speed * delta;
-
-            // Update position to stay on its orbit
-            capsule.x = centerX + capsule.orbitRadius * Math.cos(capsule.angle);
-            capsule.y = centerY + capsule.orbitRadius * Math.sin(capsule.angle);
-        }
-    }
+        // Update position to stay on its orbit
+        capsule.x = centerX + capsule.orbitRadius * Math.cos(capsule.angle);
+        capsule.y = centerY + capsule.orbitRadius * Math.sin(capsule.angle);
+        // Optional: rotate capsule to face direction of travel?
+        // capsule.rotation = capsule.angle + Math.PI / 2;
+    });
 }
 
 export function resetCapsules() {
@@ -157,32 +119,4 @@ export function resetCapsules() {
      capsules.forEach(c => c.destroy());
      capsules.length = 0;
      console.log("Capsules reset.");
-}
-
-// Add this function to handle capsule retrieval
-export function retrieveCapsule(orbitIndex) {
-    if (!capsulesContainer) {
-        console.warn("Cannot retrieve capsule: Container not available");
-        return false;
-    }
-    
-    // Find the capsule in this orbit
-    const capsuleIndex = capsules.findIndex(cap => cap.orbitIndex === orbitIndex);
-    if (capsuleIndex === -1) {
-        console.warn(`No capsule found in orbit ${orbitIndex} to retrieve`);
-        return false;
-    }
-    
-    const capsule = capsules[capsuleIndex];
-    console.log(`Retrieving capsule from orbit ${orbitIndex}`);
-    
-    // Mark for retrieval animation
-    capsule.retrieving = true;
-    capsule.retrievalStartTime = Date.now();
-    
-    // Store original position for animation
-    capsule.originalX = capsule.x;
-    capsule.originalY = capsule.y;
-    
-    return true;
 }
