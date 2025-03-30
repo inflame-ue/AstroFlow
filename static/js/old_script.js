@@ -1,4 +1,3 @@
-// Create the PixiJS application
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -8,7 +7,6 @@ const app = new PIXI.Application({
     autoDensity: true,
 });
 
-// Add the canvas to the container
 document.getElementById('canvas-container').appendChild(app.view);
 
 let earth;
@@ -41,12 +39,9 @@ const hardcodedRelativePath = [
   { x: -180, y: -250 }, { x: -150, y: -220 }, { x: -100, y: -180 }, { x: -50, y: -160 }, 
   { x: 0, y: -150 } 
 ];
-// --- End Hardcoded Path ---
 
-// --- Get Combined Simulation Data --- 
 let simData = {}; // Make this globally accessible
 
-// --- Image URLs (Construct Absolute Paths) --- 
 const origin = window.location.origin; // e.g., http://127.0.0.1:5000
 let earthImageRelativeUrl = document.body.getAttribute('data-earth-image-url') || '/static/images/earth.svg';
 const earthImageUrl = origin + earthImageRelativeUrl;
@@ -57,17 +52,14 @@ const capsuleImageUrl = origin + '/static/images/capsule.svg'; // Add capsule im
 
 console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl, capsuleImageUrl);
 
-// Fetch form data and process it
 fetch('/api/form_data')
     .then((res) => res.json())
     .then((fetchedData) => { // Rename parameter to avoid shadowing
         console.log("Fetched FormData", fetchedData);
         simData = fetchedData; // Assign to the global variable
         
-        // Process orbit data
         orbitRadiiScaled = []; // Clear previous scaled radii
         if (simData && simData.orbits) {
-            // Calculate scaled orbit radii
             orbitRadiiScaled = Object.values(simData.orbits).map(orbit => {
                 try {
                      return parseFloat(orbit.radius) * KM_TO_PIXEL_SCALE;
@@ -78,23 +70,18 @@ fetch('/api/form_data')
             }).filter(r => r > 0); // Filter out invalid radii
         }
         
-        // Load assets and create visualization after we have the data
         return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl, capsuleImageUrl])
             .then((textures) => {
-                // Store textures globally
                 loadedTextures = textures;
-                // Now we have both data and textures, create the visualization
                 createVisualization(textures); // Pass only textures, simData is global
             });
     })
     .catch((error) => {
         console.error('Error loading data or assets:', error);
-        // Create a fallback
-        createFallbackVisualization();
++        createFallbackVisualization();
     });
 
 function createVisualization(textures) { // Remove formData parameter
-    // --- Create Orbits --- 
     orbitsContainer = new PIXI.Container();
     app.stage.addChild(orbitsContainer);
 
@@ -104,25 +91,19 @@ function createVisualization(textures) { // Remove formData parameter
     orbitsContainer.y = app.screen.height / 2;
     orbitGraphics.lineStyle(1, 0xFFFFFF, 0.5);
 
-    // Draw orbits based on scaled radii
     orbitRadiiScaled.forEach(radius => {
         orbitGraphics.drawCircle(0, 0, radius);
     });
-    // --- End Orbits ---
-
-    // --- Create Satellites --- 
     satellitesContainer = new PIXI.Container();
     app.stage.addChild(satellitesContainer);
     satellitesContainer.x = app.screen.width / 2;
     satellitesContainer.y = app.screen.height / 2;
 
-    // Create satellites based on JSON data
     if (simData && simData.satellites) {
         Object.entries(simData.satellites).forEach(([satId, satData]) => {
             const orbitId = satData.orbitId;
             const orbitData = simData.orbits[orbitId];
             
-            // Calculate radius and speed from the matching orbit
             const radius = parseFloat(orbitData.radius) * KM_TO_PIXEL_SCALE;
             const angle = parseFloat(satData.angle - 90) * (Math.PI / 180); // Convert degrees to radians
             const speed = -parseFloat(orbitData.speed) * 0.0001; // Scale speed appropriately
@@ -133,7 +114,6 @@ function createVisualization(textures) { // Remove formData parameter
             satellite.anchor.set(0.5);
             satellite.scale.set(0.07);
 
-            // Initial position
             satellite.x = radius * Math.cos(angle);
             satellite.y = radius * Math.sin(angle);
 
@@ -146,9 +126,6 @@ function createVisualization(textures) { // Remove formData parameter
             });
         });
     }
-    // --- End Satellites ---
-
-    // Create Earth sprite using the preloaded texture
     earth = new PIXI.Sprite(textures[earthImageUrl]);
     earth.anchor.set(0.5);
     earth.scale.set(0.37);
@@ -158,7 +135,6 @@ function createVisualization(textures) { // Remove formData parameter
     // Add Earth last so it's on top of orbits and satellites
     app.stage.addChild(earth);
 
-    // --- Create Fuel Station Sprites from Launchpads --- 
     // Ensure fuelStations array is cleared BEFORE creating new ones
     fuelStations.forEach(fs => fs.destroy());
     fuelStations = []; 
