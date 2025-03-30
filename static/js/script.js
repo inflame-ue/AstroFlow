@@ -23,6 +23,10 @@ let currentPathIndex = 0;
 const rocketSpeed = 2; // Pixels per frame, adjust as needed
 let flameTrailContainer; // Container for flame trail particles
 const flameParticles = []; // Array to track flame particles
+let capsulesContainer; // Container for deployed capsules
+const capsules = []; // Array to track deployed capsules
+const deployedOrbits = new Set(); // Track which orbits already received capsules
+let loadedTextures = {}; // Global variable to store loaded textures
 
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
@@ -48,9 +52,10 @@ let earthImageRelativeUrl = document.body.getAttribute('data-earth-image-url') |
 const earthImageUrl = origin + earthImageRelativeUrl;
 const satelliteImageUrl = origin + '/static/images/satellite.png';
 const gasStationImageUrl = origin + '/static/images/gas_station.svg';
-const rocketImageUrl = origin + '/static/images/rocket.svg'; // Add rocket image URL
+const rocketImageUrl = origin + '/static/images/rocket.svg';
+const capsuleImageUrl = origin + '/static/images/capsule.svg'; // Add capsule image URL
 
-console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl);
+console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl, capsuleImageUrl);
 
 // Fetch form data and process it
 fetch('/api/form_data')
@@ -74,8 +79,10 @@ fetch('/api/form_data')
         }
         
         // Load assets and create visualization after we have the data
-        return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl])
+        return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl, capsuleImageUrl])
             .then((textures) => {
+                // Store textures globally
+                loadedTextures = textures;
                 // Now we have both data and textures, create the visualization
                 createVisualization(textures); // Pass only textures, simData is global
             });
@@ -118,7 +125,7 @@ function createVisualization(textures) { // Remove formData parameter
             // Calculate radius and speed from the matching orbit
             const radius = parseFloat(orbitData.radius) * KM_TO_PIXEL_SCALE;
             const angle = parseFloat(satData.angle - 90) * (Math.PI / 180); // Convert degrees to radians
-            const speed = parseFloat(orbitData.speed) * 0.0001; // Scale speed appropriately
+            const speed = -parseFloat(orbitData.speed) * 0.0001; // Scale speed appropriately
             
             console.log(`Creating satellite ${satId} at angle ${satData.angle}° in orbit ${orbitId} with radius ${radius}px`);
 
@@ -236,6 +243,16 @@ function createVisualization(textures) { // Remove formData parameter
     }
     flameTrailContainer = new PIXI.Container();
     app.stage.addChild(flameTrailContainer);
+    
+    // Create capsules container
+    if (capsulesContainer) {
+        capsulesContainer.destroy();
+    }
+    capsulesContainer = new PIXI.Container();
+    app.stage.addChild(capsulesContainer);
+    
+    // Reset orbit tracking for capsule deployment
+    deployedOrbits.clear();
     
     rocket = new PIXI.Sprite(textures[rocketImageUrl]);
     rocket.anchor.set(0.5); // Anchor at center
@@ -355,6 +372,57 @@ app.ticker.add((delta) => {
                 flameTrailContainer.addChild(particle);
                 flameParticles.push(particle);
             }
+            
+            // Check if rocket is crossing any orbit to deploy capsules
+            const centerX = app.screen.width / 2;
+            const centerY = app.screen.height / 2;
+            const rocketDistToCenter = Math.sqrt(
+                Math.pow(rocket.x - centerX, 2) + 
+                Math.pow(rocket.y - centerY, 2)
+            );
+            
+            // Check each orbit radius
+            orbitRadiiScaled.forEach((orbitRadius, orbitIndex) => {
+                // Skip if we already deployed to this orbit
+                if (deployedOrbits.has(orbitIndex)) return;
+                
+                // Calculate how close rocket is to this orbit's perimeter
+                const distToOrbit = Math.abs(rocketDistToCenter - orbitRadius);
+                
+                // If we're crossing an orbit (within 5 pixels of its perimeter)
+                if (distToOrbit < 5) {
+                    console.log(`Deploying capsule at orbit ${orbitIndex} crossing`);
+                    
+                    // Create capsule sprite - use loadedTextures instead of textures
+                    const capsule = new PIXI.Sprite(loadedTextures[capsuleImageUrl]);
+                    capsule.anchor.set(0.5);
+                    capsule.scale.set(0);  // Start small for animation
+                    capsule.x = rocket.x;
+                    capsule.y = rocket.y;
+                    capsule.alpha = 0;  // Start transparent
+                    
+                    // Add tracking data
+                    capsule.orbitRadius = orbitRadius;
+                    capsule.orbitIndex = orbitIndex;
+                    capsule.angle = Math.atan2(rocket.y - centerY, rocket.x - centerX);
+                    capsule.age = 0;
+                    
+                    // Get the orbit speed from the matching orbit in simData
+                    const orbitId = Object.keys(simData.orbits)[orbitIndex];
+                    if (orbitId && simData.orbits[orbitId]) {
+                        capsule.speed = parseFloat(simData.orbits[orbitId].speed) * 0.0001; // Same scaling as satellites
+                    } else {
+                        capsule.speed = 0.003; // Fallback speed if orbit data not found
+                    }
+                    
+                    // Add to container and array
+                    capsulesContainer.addChild(capsule);
+                    capsules.push(capsule);
+                    
+                    // Mark this orbit as having a capsule
+                    deployedOrbits.add(orbitIndex);
+                }
+            });
         }
     }
     
@@ -371,6 +439,28 @@ app.ticker.add((delta) => {
             flameParticles.splice(i, 1);
         }
     }
+    
+    // Animate capsules (fade in, grow, then orbit)
+    capsules.forEach((capsule) => {
+        capsule.age += delta;
+        
+        const centerX = app.screen.width / 2;
+        const centerY = app.screen.height / 2;
+        
+        if (capsule.age < 30) {
+            // Grow and fade in animation - scale now half the previous size
+            capsule.scale.set(Math.min(0.025, capsule.age * 0.001));
+            capsule.alpha = Math.min(1, capsule.age * 0.05);
+        } else {
+            // Once fully appeared, orbit around Earth at the appropriate radius
+            // Use the same speed as satellites in this orbit
+            capsule.angle += capsule.speed * delta;
+            
+            // Update position to stay on its orbit
+            capsule.x = centerX + capsule.orbitRadius * Math.cos(capsule.angle);
+            capsule.y = centerY + capsule.orbitRadius * Math.sin(capsule.angle);
+        }
+    });
 });
 
 // Handle window resize
@@ -412,6 +502,17 @@ window.addEventListener('resize', () => {
             star.y = Math.random() * app.screen.height;
         }
     });
+
+    // Clear capsules on resize to prevent issues
+    if (capsulesContainer) {
+        while (capsulesContainer.children.length > 0) {
+            const capsule = capsulesContainer.children[0];
+            capsulesContainer.removeChild(capsule);
+            capsule.destroy();
+        }
+        capsules.length = 0;
+        deployedOrbits.clear();
+    }
 
     // Recalculate dynamic path [start_station, farthest_orbit_top] 
     if (earth && earth.parent) { 
