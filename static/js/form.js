@@ -389,14 +389,23 @@ document.addEventListener('DOMContentLoaded', function () {
               body: new URLSearchParams({
                   'formData': JSON.stringify(formDataObj)
               }),
-              redirect: 'follow' // Allow the browser to follow redirects
+              // We don't strictly need 'follow' if we manually check redirected status
+              // redirect: 'follow' 
           })
           .then(response => {
-              if (!response.ok) {
+              // Check if the server responded with a redirect
+              if (response.redirected) {
+                  // If redirected, manually navigate the browser to the final URL
+                  window.location.href = response.url; 
+              } else if (response.ok) {
+                  // If the response was successful but not a redirect (e.g., status 200 OK)
+                  // This shouldn't happen with your current Flask code, but as a fallback:
+                  console.warn("Server responded OK but did not redirect. Navigating manually.");
+                  window.location.href = '/simulation'; 
+              } else {
+                  // If the response status indicates an error (4xx, 5xx)
                   throw new Error(`Form submission failed: ${response.status} ${response.statusText}`);
               }
-              // The server will handle the redirect to simulation page
-              // The browser will automatically follow the redirect
           })
           .catch(error => {
               console.error('Error submitting form:', error);
