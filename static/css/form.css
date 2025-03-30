@@ -1,13 +1,13 @@
 :root {
   --background: #0b090a;
-  --card-bg: #161a1d;
+  --card-bg: #051923;
   --text-primary: #ffffff;
-  --text-secondary: #d3d3d3;
-  --accent-red: #a4161a;
-  --accent-brightred: #e5383b;
-  --border-normal: #660708;
-  --neon-glow: 0 0 5px var(--accent-red), 0 0 10px var(--accent-brightred);
-  --subtle-glow: 0 0 3px #eb5e28;
+  --text-secondary: #00A6FB;
+  --accent: #0582CA;
+  --accent-brightred: #00A6FB;
+  --border-normal: #006494;
+  --neon-glow: 0 0 5px var(--accent), 0 0 10px var(--accent-brightred);
+  --subtle-glow: 0 0 3px #FFD500;
 }
 
 body {
@@ -46,13 +46,13 @@ h1 {
   text-transform: uppercase;
   letter-spacing: 3px;
   margin-bottom: 30px;
-  border-bottom: 1px solid var(--accent-red);
+  border-bottom: 1px solid var(--accent);
   padding-bottom: 10px;
-  text-shadow: 0 0 5px var(--accent-red);
+  text-shadow: 0 0 5px var(--accent);
 }
 
 h2 {
-  color: var(--accent-red);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-top: 30px;
@@ -73,7 +73,7 @@ h2 {
 }
 
 .item-container:hover {
-  border-color: var(--accent-red);
+  border-color: var(--accent);
   box-shadow: var(--neon-glow);
 }
 
@@ -101,7 +101,7 @@ h2 {
 label {
   display: block;
   margin-bottom: 5px;
-  color: var(--accent-red);
+  color: var(--accent);
   font-size: 0.9em;
 }
 
@@ -127,9 +127,9 @@ select:focus {
 .add-field-btn {
   cursor: pointer;
   padding: 8px 15px;
-  color: var(--accent-red);
+  color: var(--accent);
   background-color: transparent;
-  border: 1px solid var(--accent-red);
+  border: 1px solid var(--accent);
   border-radius: 4px;
   text-align: center;
   margin-top: 10px;
@@ -176,7 +176,7 @@ select:focus {
 }
 
 .submit-btn:hover {
-  background-color: var(--accent-red);
+  background-color: var(--accent);
   box-shadow: var(--neon-glow);
 }
 
@@ -221,7 +221,7 @@ select:focus {
 }
 
 .unit {
-  color: var(--accent-red);
+  color: var(--accent);
   font-size: 0.8em;
 }
 
