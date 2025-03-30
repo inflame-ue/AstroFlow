@@ -252,7 +252,7 @@ select:focus {
   padding: 20px;
   top: 0;
   right: 0;
-  width: 750px;
+  min-width: 400px;
   background-color: transparent;
   transition: transform 0.4s ease-in-out;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
