@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', function () {
               }
           }
 
-          console.log('Form Data:', formDataObj);
+          //   console.log('Form Data:', formDataObj);
           
           // Visual feedback - hide form and show toggle bar
           const formContainer = document.querySelector('.form-container');
