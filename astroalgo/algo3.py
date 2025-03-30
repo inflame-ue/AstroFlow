@@ -7,7 +7,7 @@ import time
 
 EARTH_RADIUS = 6378.137  # km
 # BASE_ORBITAL_SPEED_FACTOR = 0.001 # Reduced speed factor
-BASE_ORBITAL_SPEED_FACTOR = 0.002 # Increased speed factor
+BASE_ORBITAL_SPEED_FACTOR = 0.02 # Increased speed factor
 LOWEST_ORBIT_RADIUS = EARTH_RADIUS + 200 # Reference radius for speed calculation
 MU = 398600.4418  # Earth's gravitational parameter (km³/s²). Adjust units as needed.
 
@@ -329,15 +329,31 @@ class SimulateMission:
                 np.sqrt(1 - e) * np.cos(E / 2)
             )
 
-            # For inward transfers, true anomaly goes from pi towards 0 (or 2pi)
-            # Our calculation yields 0 to pi based on E from 0 to pi.
-            # Adjust true anomaly if it's an inward transfer
-            if transfer.r1 > transfer.r2:
-                 true_anomaly = np.pi + (np.pi - true_anomaly) # Should map E=0..pi to true_anomaly=pi..2pi
+            # Determine the actual true anomaly based on transfer direction
+            if transfer.r1 < transfer.r2: # Outward
+                current_true_anomaly = true_anomaly # Sweeps 0 to pi
+            else: # Inward
+                # Need to sweep from pi to 2*pi (or pi to 0)
+                # Map E=0..pi to True Anomaly=pi..2pi
+                current_true_anomaly = (np.pi + (np.pi - true_anomaly)) # No modulo here, keep range for cosine
 
-            # Calculate position (r, inertial_angle)
-            r = a * (1 - e**2) / (1 + e * np.cos(true_anomaly))
-            inertial_angle = (angle_of_periapsis + true_anomaly) % (2 * np.pi)
+            # --- Calculate r and inertial_angle using adjusted true anomaly --- 
+            # Calculate radius using true anomaly (handles direction correctly)
+            # Denominator check (should not be -1 for elliptical orbits e<1)
+            denominator_r = 1 + e * np.cos(current_true_anomaly)
+            if abs(denominator_r) < 1e-9:
+                # Handle potential division by zero or close to it
+                # Fallback: use the E-based calculation (less preferred now)
+                r = a * (1 - e * np.cos(E))
+                print(f"Warning: Denominator near zero in r calculation at E={E:.4f}, true_anomaly={current_true_anomaly:.4f}")
+            else:
+                 r = a * (1 - e**2) / denominator_r
+
+            # Calculate inertial angle using true anomaly relative to periapsis
+            # 'angle_of_periapsis' was calculated *before* the loop based on r1 vs r2
+            inertial_angle = (angle_of_periapsis + current_true_anomaly) % (2 * np.pi)
+            # --- END REFINED METHOD --- 
+
             pos_x = r * np.cos(inertial_angle)
             pos_y = r * np.sin(inertial_angle)
 
@@ -371,6 +387,13 @@ class SimulateMission:
         final_calculated_angle = inertial_angle % (2 * np.pi) # Use the angle from the last step
         self.tanker.radius = transfer.r2 # Ensure exact final radius
         self.tanker.angle = final_calculated_angle # Ensure exact final angle from calculation
+
+        # --- Update the last trajectory point to match final state --- 
+        final_x = self.tanker.radius * np.cos(self.tanker.angle)
+        final_y = self.tanker.radius * np.sin(self.tanker.angle)
+        if transfer_trajectory_points: # Ensure list is not empty
+             transfer_trajectory_points[-1] = (self.mission_clock, final_x, final_y)
+        # --- End update last point ---
 
         # Set final speed for the new circular orbit
         self.tanker.speed = np.sqrt(MU / transfer.r2) * BASE_ORBITAL_SPEED_FACTOR
@@ -427,6 +450,9 @@ class SimulateMission:
 
             # Update mission time proportionally through the estimated duration
             self.mission_clock = current_time
+            # --- Add trajectory point for this step --- 
+            launch_trajectory_points.append((self.mission_clock, x, y))
+            # --- End add trajectory point --- 
 
         # Update tanker position
         tanker.radius = final_radius
@@ -438,6 +464,11 @@ class SimulateMission:
         # Add mission event
         tanker.add_event(self.mission_clock, f"Launched to orbit {final_radius:.1f} km at angle {target_angle:.2f} rad")
         
+        # --- Append exact final state to trajectory --- 
+        final_pos = tanker.position()
+        launch_trajectory_points.append((self.mission_clock, final_pos[0], final_pos[1]))
+        # --- End append final state ---
+
         return launch_trajectory_points # Return points
     
     def simulate_reentry(self, tanker: Tanker, target_landing_angle: float):
@@ -495,6 +526,9 @@ class SimulateMission:
 
             # Update mission time
             self.mission_clock = current_time
+            # --- Add trajectory point for this step --- 
+            reentry_trajectory_points.append((self.mission_clock, x, y))
+            # --- End add trajectory point --- 
 
         # Update tanker final position (landed)
         tanker.radius = self.planet_radius
@@ -505,6 +539,11 @@ class SimulateMission:
         # Add mission event
         tanker.add_event(self.mission_clock, "Successful reentry and landing complete")
         
+        # --- Append exact final state to trajectory --- 
+        final_pos = tanker.position()
+        reentry_trajectory_points.append((self.mission_clock, final_pos[0], final_pos[1]))
+        # --- End append final state ---
+
         return reentry_trajectory_points # Return points
     
     def deploy_shuttle_to_orbit(self, orbit: Orbit):
@@ -913,14 +952,26 @@ class SimulateMission:
             num_trajectory_points = len(self.tanker_mission_trajectory)
             if num_trajectory_points < 2: return init() # Need at least 2 points
 
-            # Calculate the corresponding index in the trajectory list
-            trajectory_index = int((frame / (num_frames - 1)) * (num_trajectory_points - 1))
-            trajectory_index = min(max(0, trajectory_index), num_trajectory_points - 1)
+            # Calculate the position in the trajectory corresponding to the current frame
+            target_traj_pos = (frame / (num_frames - 1)) * (num_trajectory_points - 1)
+            idx0 = int(target_traj_pos)
+            # Ensure indices are within bounds
+            idx0 = min(max(0, idx0), num_trajectory_points - 2) # Allow idx1 to be the last point
+            idx1 = idx0 + 1
 
-            # Get the time, x, y from the trajectory point
-            current_time, current_x, current_y = self.tanker_mission_trajectory[frame]
-            estimated_mission_time = current_time
-            # Update satellite positions
+            # Calculate interpolation ratio
+            interp_ratio = target_traj_pos - idx0
+
+            # Get the two trajectory points for interpolation
+            time0, x0, y0 = self.tanker_mission_trajectory[idx0]
+            time1, x1, y1 = self.tanker_mission_trajectory[idx1]
+
+            # Interpolate time and position
+            estimated_mission_time = time0 + interp_ratio * (time1 - time0)
+            current_x = x0 + interp_ratio * (x1 - x0)
+            current_y = y0 + interp_ratio * (y1 - y0)
+
+            # Update satellite positions using interpolated time
             for satellite, marker in satellite_markers:
                 if satellite.active:
                     satellite_angle = (satellite.initial_angle + satellite.speed * estimated_mission_time) % (2 * np.pi)
@@ -930,11 +981,8 @@ class SimulateMission:
                 else:
                     marker.set_data([], [])
 
-            # Update shuttle positions and paths
+            # Update shuttle positions and paths using interpolated time
             for shuttle, marker in shuttle_markers:
-                # --- DEBUG SHUTTLE --- #
-                # print(f"Frame Time: {estimated_mission_time:.2f}, Shuttle: {shuttle.id}, Deployed: {shuttle.deployed}, Active: {shuttle.active}, DeployTime: {shuttle.deployment_time}, RecoverTime: {shuttle.recovery_time}") # Updated debug print
-                
                 # Determine if shuttle should be visible at this frame time
                 is_deployed = shuttle.deployed and shuttle.deployment_time is not None and estimated_mission_time >= shuttle.deployment_time
                 is_not_yet_recovered = shuttle.recovery_time is None or estimated_mission_time < shuttle.recovery_time
@@ -949,35 +997,35 @@ class SimulateMission:
                     shuttle_x = shuttle.radius * np.cos(shuttle_angle)
                     shuttle_y = shuttle.radius * np.sin(shuttle_angle)
                     marker.set_data([shuttle_x], [shuttle_y])
-                    # print(f"  Drawing Shuttle {shuttle.id} at angle {shuttle_angle:.2f}") # Uncomment if needed
-                else:
-                    # Hide marker if not deployed yet, inactive, or recovered
-                    marker.set_data([], [])
 
-            # Update tanker position using the pre-calculated trajectory index
-            if self.tanker_mission_trajectory:
-                # tanker_pos = self.tanker_mission_trajectory[trajectory_index]
-                # Use current_x, current_y obtained earlier
-                tanker_marker.set_data([current_x], [current_y])
+            # Update tanker position using interpolated position
+            tanker_marker.set_data([current_x], [current_y])
 
-                # Update full historical trajectory line up to current point - REINSTATED
-                trajectory_slice = self.tanker_mission_trajectory[:trajectory_index+1]
-                if trajectory_slice:
-                    tanker_full_path_line.set_data(
-                        [pos[1] for pos in trajectory_slice], # Index 1 for x
-                        [pos[2] for pos in trajectory_slice]  # Index 2 for y
-                    )
-                else:
-                     tanker_full_path_line.set_data([],[])
+            # Update full historical trajectory line up to the current *interpolated* point?
+            # Option 1: Still use trajectory slice up to idx1 (simpler, path follows points)
+            # Option 2: Build interpolated path (more complex, smoother visually)
+            # Let's stick with Option 1 for now to keep the change focused.
+            # We need the index representing the *current segment* of the path being shown.
+            current_segment_index = idx1 # The tanker is between idx0 and idx1
 
+            trajectory_slice = self.tanker_mission_trajectory[:current_segment_index + 1]
+            if trajectory_slice:
+                # Optionally, add the current interpolated point for a smoother tail
+                # path_x = [pos[1] for pos in trajectory_slice] + [current_x]
+                # path_y = [pos[2] for pos in trajectory_slice] + [current_y]
+                # tanker_full_path_line.set_data(path_x, path_y)
+                # --- OR --- Keep it simpler, just plot points up to current segment end
+                tanker_full_path_line.set_data(
+                    [pos[1] for pos in trajectory_slice], # Index 1 for x
+                    [pos[2] for pos in trajectory_slice]  # Index 2 for y
+                )
             else:
-                tanker_marker.set_data([], [])
-                tanker_full_path_line.set_data([], [])
+                 tanker_full_path_line.set_data([],[])
 
-            # Update mission time text
+            # Update mission time text using interpolated time
             time_text.set_text(f'Mission Time: {estimated_mission_time:.2f}')
-            
-            # Update mission status text based on events
+
+            # Update mission status text based on interpolated time
             status = "Pre-launch"
             for event_time, event_desc in self.tanker.mission_events:
                 if event_time <= estimated_mission_time:
