@@ -7,3 +7,4 @@ export const ROCKET_SPEED = 2; // Pixels per frame, adjust as needed
 // Add other shared constants if needed, e.g., default colors, animation speeds
 export const STAR_COUNT = 200;
 export const DEFAULT_SIM_DATA = { launchpads: {}, satellites: {}, orbits: {} };
+export const DEFAULT_RESULT_SIM_DATA = {events: [], trajectory: [] };

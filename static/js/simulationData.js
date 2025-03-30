@@ -1,10 +1,13 @@
 // static/js/simulationData.js
 
-import { DEFAULT_SIM_DATA, KM_TO_PIXEL_SCALE } from './constants.js';
+import { DEFAULT_SIM_DATA, KM_TO_PIXEL_SCALE, DEFAULT_RESULT_SIM_DATA } from './constants.js';
 
 // Globally accessible simulation data and derived data
 let simData = DEFAULT_SIM_DATA;
 let orbitRadiiScaled = [];
+// Add global variable for simulation results
+let simResults = DEFAULT_RESULT_SIM_DATA;
+let processedTrajectory = [];
 
 // Function to fetch data from the backend API
 async function fetchSimulationData() {
@@ -40,12 +43,43 @@ async function fetchSimulationResults() {
 function processSimulationResults(fetchedData) {
     if (!fetchedData) {
         console.log("No simulation results to process.");
-        return;
+        simResults = { ...DEFAULT_RESULT_SIM_DATA }; // Use copy of default
+        processedTrajectory = [];
+        return processedTrajectory;
     }
 
-    // Process fetched data as needed
-    // This is a placeholder for actual processing logic
-    console.log("Processing Simulation Results:", fetchedData);
+    // Store the raw data
+    simResults = fetchedData;
+    
+    // Process trajectory data
+    processedTrajectory = [];
+    if (simResults.trajectory && Array.isArray(simResults.trajectory)) {
+        // Convert trajectory points, scale if needed
+        processedTrajectory = simResults.trajectory.map(point => {
+            try {
+                if (Array.isArray(point) && point.length >= 3) {
+                    // Assuming format [time, x, y]
+                    const time = parseFloat(point[0]);
+                    // Scale x and y if they're in kilometers
+                    const x = parseFloat(point[1]) * KM_TO_PIXEL_SCALE;
+                    const y = parseFloat(point[2]) * KM_TO_PIXEL_SCALE;
+                    
+                    if (isNaN(time) || isNaN(x) || isNaN(y)) {
+                        throw new Error(`Invalid trajectory point values: ${point}`);
+                    }
+                    
+                    return [time, x, y];
+                }
+                throw new Error(`Invalid trajectory point format: ${point}`);
+            } catch (e) {
+                console.warn("Error processing trajectory point:", point, e);
+                return null; // Use null for invalid points
+            }
+        }).filter(p => p !== null); // Filter out invalid points
+    }
+    
+    console.log(`Processed ${processedTrajectory.length} trajectory points`);
+    return processedTrajectory;
 }
 
 // Function to process fetched data (calculate scaled radii, etc.)
@@ -82,19 +116,23 @@ function processSimulationData(fetchedData) {
 export async function loadAndProcessSumulationResults() {
     const results = await fetchSimulationResults();
     if (results) {
-        processSimulationResults(results);
+        return processSimulationResults(results);
     }
+    return []; // Return empty array if no results
 }
 
 // Function combining fetch and process
 export async function loadAndProcessSimulationData() {
     const data = await fetchSimulationData();
+    processSimulationData(data);
+    
     const results = await fetchSimulationResults();
     if (results) {
+        processSimulationResults(results);
     }
-    processSimulationData(data);
-    // Return the processed data structure if needed, though it's also global
-    return { simData, orbitRadiiScaled };
+    
+    // Return the processed data structures if needed
+    return { simData, orbitRadiiScaled, simResults, processedTrajectory };
 }
 
 // Export getters for potentially easier access from other modules
@@ -104,4 +142,13 @@ export function getSimData() {
 
 export function getOrbitRadiiScaled() {
     return orbitRadiiScaled;
+}
+
+// Add getters for simulation results
+export function getSimResults() {
+    return simResults;
+}
+
+export function getProcessedTrajectory() {
+    return processedTrajectory;
 }
