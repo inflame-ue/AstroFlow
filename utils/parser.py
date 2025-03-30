@@ -19,20 +19,19 @@ def normalize_form_data(form_data: dict) -> dict:
             if radius > 17000:
                 if radius > 42000 or radius < 0:
                     radius = 42000  # scale down to max radius
-                # Using an even smaller scaling factor to downscale more aggressively
                 normalized_radius = 17000 + (radius - 17000) * (5000 / 42000)
-                value['radius'] = str(normalized_radius)  # Convert back to string to match expected type
+                value['radius'] = str(normalized_radius)  # convert back to string to match expected type
             else:
                 if radius < 8000:
-                    # Upscale very small orbits to ensure visibility
-                    radius = 8000  # Set minimum radius to 8000 km
+                    # upscale very small orbits to ensure visibility
+                    radius = 8000  # set minimum radius to 8000 km
                 value['radius'] = str(radius)
         except KeyError as e:
             print(f"Error while accessing radius: {e}")
         except ValueError as e:
             print(f"Error while converting radius to float: {e}")
     
-    # Also need to update satellite radius values that reference these orbits
+    # also need to update satellite radius values that reference these orbits
     if 'satellites' in form_data:
         for satellite in form_data['satellites'].values():
             try:
