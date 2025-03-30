@@ -2,10 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Background</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Simulation</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
+    <style>
+        /* Fix for iOS 100vh issue */
+        body, html, #canvas-container {
+            height: 100vh; /* Fallback */
+            height: calc(var(--vh, 1vh) * 100);
+        }
+        
+        .status-message {
+            transition: opacity 0.5s ease;
+        }
+    </style>
 </head>
 <body 
     data-earth-image-url="{{ url_for('static', filename='images/earth.svg') }}"
@@ -28,7 +39,7 @@
     
     <!-- Configuration data panel -->
     {% if form_data %}
-    <button class="toggle-data-btn" id="toggleDataBtn">Show Configuration</button>
+    <button class="toggle-data-btn" id="toggleDataBtn">Show Config</button>
     <div class="data-panel" id="dataPanel">
         <h3>Configuration Data</h3>
         <pre id="configData">{{ form_data|tojson(indent=2) }}</pre>
@@ -38,14 +49,17 @@
             const panel = document.getElementById('dataPanel');
             if (panel.style.display === 'block') {
                 panel.style.display = 'none';
-                this.textContent = 'Show Configuration';
+                this.textContent = 'Show Config';
             } else {
                 panel.style.display = 'block';
-                this.textContent = 'Hide Configuration';
+                this.textContent = 'Hide Config';
             }
         });
     </script>
     {% endif %}
+    
+    <!-- Mobile enhancements -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
     <!-- Include your main script AS A MODULE -->
     <script type="module" src="{{ url_for('static', filename='js/script.js') }}"></script>
