@@ -210,9 +210,12 @@ def internal_server_error(e):
 def get_form_data():
     # This endpoint remains useful for JavaScript to fetch data if needed
     form_data = session.get('form_data')
-    sim_results = session.get('simulation_results')
-
     return jsonify(form_data if form_data else {})
+
+@app.route('/api/simulation_results')
+def get_simulation_results():
+    simulation_results = session.get('simulation_results')
+    return jsonify(simulation_results if simulation_results else {})
 
 
 if __name__ == '__main__':
