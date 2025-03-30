@@ -1,50 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AstroFlow Configuration</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/form.css') }}">
-    <script src="{{ url_for('static', filename='js/form.js') }}" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
-</head>
-<body>
-    <div id="pixi-background"></div>
-    <div class="form-container">
-        <div class="container">
-            <h1>AstroFlow Configuration</h1>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AstroFlow Configuration</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/form.css') }}">
+        <script src="{{ url_for('static', filename='js/form.js') }}" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
+        <!-- Add mobile-specific styles -->
+        <style>
+            /* Base responsive styles */
+            @media (max-width: 768px) {
+                body {
+                    font-size: 14px;
+                }
+                
+                .form-container {
+                    padding: 10px;
+                    max-width: 100%;
+                    margin: 0;
+                }
+                
+                .container {
+                    padding: 15px;
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+                
+                h1 {
+                    font-size: 24px;
+                    margin-bottom: 15px;
+                }
+                
+                h2 {
+                    font-size: 18px;
+                }
+                
+                .section {
+                    margin-bottom: 20px;
+                }
+                
+                /* Make form fields full width on mobile */
+                input, select {
+                    width: 100%;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                    font-size: 16px; /* Prevent zoom on iOS */
+                    height: 44px; /* Minimum touch target size */
+                }
+                
+                /* Make buttons larger for touch targets */
+                .add-button, .submit-btn, button {
+                    height: 44px;
+                    line-height: 44px;
+                    width: 100%;
+                    font-size: 16px;
+                    margin: 10px 0;
+                }
+                
+                /* Stack form elements vertically */
+                .form-row {
+                    flex-direction: column;
+                    margin-bottom: 15px;
+                }
+                
+                .form-row label {
+                    margin-bottom: 5px;
+                    width: 100%;
+                }
+                
+                /* Adjust spacing for delete buttons */
+                .delete-btn {
+                    margin-top: 5px;
+                    height: 44px;
+                    width: 44px;
+                }
+                
+                /* Increase spacing between sections */
+                .section {
+                    padding-bottom: 15px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                }
+                
+                /* Allow scrolling on the form container */
+                .form-container {
+                    max-height: 100vh;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+                }
+                
+                /* Make toggle bar easier to use on mobile */
+                .toggle-bar {
+                    height: 30px;
+                    width: 100px;
+                    margin: 0 auto;
+                }
+            }
             
-            <form id="satelliteForm">
-                <div class="section">
-                    <h2>Launchpads</h2>
-                    <div id="launchpadsContainer">
-                        <!-- Launchpads will be generated here -->
-                    </div>
-                    <div class="add-button" id="addLaunchpadBtn">+ Add Launchpad</div>
-                </div>
+            /* Even smaller screens */
+            @media (max-width: 480px) {
+                body {
+                    font-size: 13px;
+                }
                 
-                <div class="section">
-                    <h2>Orbits</h2>
-                    <div id="orbitsContainer">
-                        <!-- Orbits will be generated here -->
-                    </div>
-                    <div class="add-button" id="addOrbitBtn">+ Add Orbit</div>
-                </div>
+                .container {
+                    padding: 10px;
+                }
                 
-                <div class="section">
-                    <h2>Satellites</h2>
-                    <div id="satellitesContainer">
-                        <!-- Satellites will be generated here -->
-                    </div>
-                    <div class="add-button" id="addSatelliteBtn">+ Add Satellite</div>
-                </div>
+                h1 {
+                    font-size: 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="pixi-background"></div>
+        <div class="form-container">
+            <div class="container">
+                <h1>AstroFlow Configuration</h1>
                 
-                <div class="form-submit">
-                    <button type="submit" class="submit-btn">Start simulation</button>
-                </div>
-            </form>
+                <form id="satelliteForm">
+                    <div class="section">
+                        <h2>Launchpads</h2>
+                        <div id="launchpadsContainer" class="form-section">
+                            <!-- Launchpads will be generated here -->
+                        </div>
+                        <div class="add-button" id="addLaunchpadBtn">+ Add Launchpad</div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>Orbits</h2>
+                        <div id="orbitsContainer" class="form-section">
+                            <!-- Orbits will be generated here -->
+                        </div>
+                        <div class="add-button" id="addOrbitBtn">+ Add Orbit</div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>Satellites</h2>
+                        <div id="satellitesContainer" class="form-section">
+                            <!-- Satellites will be generated here -->
+                        </div>
+                        <div class="add-button" id="addSatelliteBtn">+ Add Satellite</div>
+                    </div>
+                    
+                    <div class="form-submit">
+                        <button type="submit" class="submit-btn">Start simulation</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
-    <div class="toggle-bar"></div>
-</body>
-</html>
+        <div class="toggle-bar"></div>
+    
+        <!-- Add a script to ensure proper sizing on mobile -->
+        <script>
+            // Handle viewport issues on mobile
+            function adjustViewport() {
+                // Fix for iOS viewport height issues
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                
+                // Adjust the background size
+                const pixiBackground = document.getElementById('pixi-background');
+                if (pixiBackground) {
+                    pixiBackground.style.height = `${window.innerHeight}px`;
+                }
+            }
+            
+            // Run on page load
+            adjustViewport();
+            
+            // Run on resize
+            window.addEventListener('resize', adjustViewport);
+            
+            // Handle form interactions for mobile
+            document.addEventListener('DOMContentLoaded', function() {
+                // Add extra spacing after deleted elements for touch devices
+                const addButtons = document.querySelectorAll('.add-button');
+                if ('ontouchstart' in window) {
+                    addButtons.forEach(button => {
+                        button.classList.add('touch-friendly');
+                    });
+                }
+            });
+        </script>
+    </body>
+    </html>
