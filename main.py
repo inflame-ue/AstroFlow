@@ -26,20 +26,18 @@ def index():
 
 @app.route('/simulation')
 def simulation():
-    # data from session if available
-    form_data = session.get('form_data', None)
     status = request.args.get('status')
     message = request.args.get('message')
 
     return render_template('simulation.html', 
-                           form_data=form_data, 
                            status=status, 
                            message=message,
-                           )
+                           form_data=session.get('form_data')) # pass form data to simulation page
 
 @app.route('/api/form_data')
 def get_form_data():
     form_data = session.get('form_data')
+    print("Form data:", form_data)
     return jsonify(form_data)
 
 
