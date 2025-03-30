@@ -1,3 +1,4 @@
+// Create the PixiJS application
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -10,6 +11,7 @@ const app = new PIXI.Application({
 // Append the Pixi canvas to the dedicated background div
 document.getElementById('pixi-background').appendChild(app.view);
 
+// Create stars
 const stars = [];
 const numStars = 200;
 
@@ -30,6 +32,7 @@ for (let i = 0; i < numStars; i++) {
     app.stage.addChild(star);
 }
 
+// Animation loop
 app.ticker.add((delta) => {
     // Animate Stars with smoother twinkling
     stars.forEach(star => {
@@ -40,6 +43,7 @@ app.ticker.add((delta) => {
     });
 });
 
+// Handle window resize for stars
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
     // Reposition stars randomly within the new bounds
@@ -50,6 +54,7 @@ window.addEventListener('resize', () => {
         }
     });
 });
+// --- End Starry Background Logic --- 
 
 document.addEventListener('DOMContentLoaded', function () {
   const launchpadsContainer = document.getElementById('launchpadsContainer');
@@ -65,7 +70,94 @@ document.addEventListener('DOMContentLoaded', function () {
   let launchpadCount = 0;
   let orbitCount = 0;
   let satelliteCount = 0;
+  
+  // Check if device is mobile
+  const isMobileDevice = () => {
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  };
+  
+  // Apply mobile-specific enhancements if on a mobile device
+  if (isMobileDevice()) {
+    applyMobileEnhancements();
+  }
+  
+  // Function to enhance form elements for mobile
+  function applyMobileEnhancements() {
+    // Make form inputs larger for better touch targets
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      @media (max-width: 768px) {
+        /* Increase input heights for better touch targets */
+        input, select, button {
+          min-height: 44px;
+          font-size: 16px !important; /* Prevent iOS zoom on focus */
+        }
+        
+        /* Increase space between form groups */
+        .form-group {
+          margin-bottom: 15px;
+        }
+        
+        /* Make buttons more tappable */
+        .remove-btn, .add-button, .submit-btn {
+          min-width: 44px;
+          min-height: 44px;
+        }
+        
+        /* Prevent 300ms tap delay */
+        * { 
+          touch-action: manipulation; 
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
+    
+    // Add active states for touch feedback
+    document.querySelectorAll('.item-container, button, input, select').forEach(el => {
+      el.addEventListener('touchstart', function() {
+        this.classList.add('touch-active');
+      });
+      
+      el.addEventListener('touchend', function() {
+        this.classList.remove('touch-active');
+      });
+    });
+    
+    // Smooth scrolling to added items
+    const originalAddLaunchpad = addLaunchpadBtn.onclick;
+    const originalAddOrbit = addOrbitBtn.onclick;
+    const originalAddSatellite = addSatelliteBtn.onclick;
+    
+    // Replace with versions that scroll to the new element
+    addLaunchpadBtn.onclick = function() {
+      const newElement = createLaunchpad(++launchpadCount);
+      smoothScrollToElement(newElement);
+    };
+    
+    addOrbitBtn.onclick = function() {
+      const newElement = createOrbit(++orbitCount);
+      smoothScrollToElement(newElement);
+    };
+    
+    addSatelliteBtn.onclick = function() {
+      const newElement = createSatellite(++satelliteCount);
+      smoothScrollToElement(newElement);
+    };
+  }
+  
+  // Helper function to smooth scroll to a newly added element
+  function smoothScrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(() => {
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center'
+      });
+    }, 100);
+  }
 
+  // Helper function to create launchpad
   function createLaunchpad(id) {
       const launchpadDiv = document.createElement('div');
       launchpadDiv.className = 'item-container launchpad-item';
@@ -86,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       launchpadsContainer.appendChild(launchpadDiv);
 
+      // Add remove button event listener
       document.getElementById(`removeLaunchpad${id}`).addEventListener('click', function() {
           if (document.querySelectorAll('.launchpad-item').length > 1) {
               launchpadDiv.remove();
@@ -97,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return launchpadDiv;
   }
 
-
+  // Helper function to create orbit
   function createOrbit(id) {
       const orbitDiv = document.createElement('div');
       orbitDiv.className = 'item-container orbit-item';
@@ -122,16 +215,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
       orbitsContainer.appendChild(orbitDiv);
       
+      // Add remove button event listener
       document.getElementById(`removeOrbit${id}`).addEventListener('click', function() {
           if (document.querySelectorAll('.orbit-item').length > 1) {
-              // check if any satellite is using this orbit
+              // Check if any satellite is using this orbit
               const satellitesUsingOrbit = document.querySelectorAll(`.satellite-item select[name^="satellite"][value="${id}"]`);
               if (satellitesUsingOrbit.length > 0) {
                   alert(`Cannot remove Orbit ${id} because it's being used by satellites. Please reassign those satellites first.`);
                   return;
               }
               orbitDiv.remove();
-              // update orbit dropdown options in all satellites
+              // Update orbit dropdown options in all satellites
               updateSatelliteOrbitOptions();
           } else {
               alert('You need at least one orbit.');
@@ -141,11 +235,13 @@ document.addEventListener('DOMContentLoaded', function () {
       return orbitDiv;
   }
 
+  // Helper function to create satellite
   function createSatellite(id) {
       const satelliteDiv = document.createElement('div');
       satelliteDiv.className = 'item-container satellite-item';
       satelliteDiv.dataset.id = id;
 
+      // Create orbit options
       let orbitOptions = '';
       const orbitItems = document.querySelectorAll('.orbit-item');
       orbitItems.forEach(orbit => {
@@ -177,6 +273,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       satellitesContainer.appendChild(satelliteDiv);
 
+      // Add remove button event listener
       document.getElementById(`removeSatellite${id}`).addEventListener('click', function() {
           if (document.querySelectorAll('.satellite-item').length > 1) {
               satelliteDiv.remove();
@@ -185,12 +282,13 @@ document.addEventListener('DOMContentLoaded', function () {
           }
       });
 
-
+      // Add change event to orbit selection
       const orbitSelect = document.getElementById(`satellite${id}Orbit`);
       orbitSelect.addEventListener('change', function() {
           updateSatelliteOrbitInfo(id, this.value);
       });
 
+      // Initialize orbit info
       updateSatelliteOrbitInfo(id, orbitSelect.value);
 
       return satelliteDiv;
@@ -285,13 +383,15 @@ document.addEventListener('DOMContentLoaded', function () {
       }
   });
 
+  // Form submission
   satelliteForm.addEventListener('submit', function(e) {
       e.preventDefault();
 
       try {
+          // Collect form data
           const formData = new FormData(satelliteForm);
           const formDataObj = {};
-
+          // Process form data
           formDataObj.launchpads = {};
           formDataObj.orbits = {};
           formDataObj.satellites = {};
@@ -317,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }
 
-          // process satellites to include radius and speed from their assigned orbit
+          // Process satellites to include radius and speed from their assigned orbit
           for (const satelliteId in formDataObj.satellites) {
               const satellite = formDataObj.satellites[satelliteId];
               const orbitId = satellite.orbitId;
@@ -328,12 +428,15 @@ document.addEventListener('DOMContentLoaded', function () {
               }
           }
 
+          //   console.log('Form Data:', formDataObj);
+          
+          // Visual feedback - hide form and show toggle bar
           const formContainer = document.querySelector('.form-container');
           const toggleBar = document.querySelector('.toggle-bar');
           formContainer.classList.add('hidden');
           toggleBar.classList.add('visible');
           
-          // fetch to submit the data directly to the server
+          // Use fetch to submit the data directly to the server
           fetch('/', {
               method: 'POST',
               headers: {
@@ -342,17 +445,21 @@ document.addEventListener('DOMContentLoaded', function () {
               body: new URLSearchParams({
                   'formData': JSON.stringify(formDataObj)
               }),
+              // We don't strictly need 'follow' if we manually check redirected status
+              // redirect: 'follow' 
           })
           .then(response => {
+              // Check if the server responded with a redirect
               if (response.redirected) {
-                  // if redirected, manually navigate the browser to the final URL
+                  // If redirected, manually navigate the browser to the final URL
                   window.location.href = response.url; 
               } else if (response.ok) {
-                  // if the response was successful but not a redirect (e.g., status 200 OK)
+                  // If the response was successful but not a redirect (e.g., status 200 OK)
+                  // This shouldn't happen with your current Flask code, but as a fallback:
                   console.warn("Server responded OK but did not redirect. Navigating manually.");
                   window.location.href = '/simulation'; 
               } else {
-                  // if the response status indicates an error (4xx, 5xx)
+                  // If the response status indicates an error (4xx, 5xx)
                   throw new Error(`Form submission failed: ${response.status} ${response.statusText}`);
               }
           })
@@ -360,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function () {
               console.error('Error submitting form:', error);
               alert('An error occurred while submitting the form. Please try again.');
               
-              // form again in case of error
+              // Show form again in case of error
               formContainer.classList.remove('hidden');
               toggleBar.classList.remove('visible');
           });
@@ -369,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
           console.error("Form submission error:", error);
           alert("An error occurred while processing the form. Please check the console for details.");
           
-          // form again in case of error
+          // Show form again in case of error
           formContainer.classList.remove('hidden');
           toggleBar.classList.remove('visible');
       }
@@ -378,7 +485,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const formContainer = document.querySelector('.form-container');
   const toggleBar = document.querySelector('.toggle-bar');
 
-  // form when clicking the toggle bar
+  // Show form when clicking the toggle bar
   toggleBar.addEventListener('click', function() {
       formContainer.classList.remove('hidden');
       toggleBar.classList.remove('visible');

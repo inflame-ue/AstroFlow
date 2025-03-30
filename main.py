@@ -23,7 +23,7 @@ except ImportError as e:
 load_dotenv()
 app = Flask(__name__)
 # secret key for session
-app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
+app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret_key_for_development_only")  # without it the app will not work
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
