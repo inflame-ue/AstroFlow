@@ -114,7 +114,7 @@
         </style>
     </head>
     <body>
-        <div id="pixi-background"></div>
+        <div id="pixi-background">
         <div class="form-container">
             <div class="container">
                 <h1>AstroFlow Configuration</h1>
@@ -160,11 +160,6 @@
                 const vh = window.innerHeight * 0.01;
                 document.documentElement.style.setProperty('--vh', `${vh}px`);
                 
-                // Adjust the background size
-                const pixiBackground = document.getElementById('pixi-background');
-                if (pixiBackground) {
-                    pixiBackground.style.height = `${window.innerHeight}px`;
-                }
             }
             
             // Run on page load
@@ -184,5 +179,6 @@
                 }
             });
         </script>
+    </div>
     </body>
     </html>

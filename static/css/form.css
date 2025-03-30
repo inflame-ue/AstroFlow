@@ -18,7 +18,6 @@ body {
   padding: 0;
   line-height: 1.6;
   position: relative;
-  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -26,7 +25,6 @@ body {
 }
 
 #pixi-background canvas {
-  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
