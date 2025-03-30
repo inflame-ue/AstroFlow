@@ -883,7 +883,7 @@ class SimulateMission:
         # Apply the launch pad efficiency factor to make fuel usage different
         fuel_mass_kg = self.total_delta_v * FUEL_MASS_PER_DELTA_V_KG_PER_KMS * self.launch_pad_efficiency
         fuel_liters = fuel_mass_kg / FUEL_DENSITY_KG_PER_LITER
-        return fuel_liters
+        return fuel_liters / 20.0
 
     def simulate_mission(self):
         """Simulate the entire mission with multiple transfers and shuttle deployments"""
@@ -1451,7 +1451,7 @@ class SimulateMission:
 
 
             # Update mission time text (displaying seconds)
-            time_text.set_text(f'Time: {estimated_mission_time:.1f} seconds')
+            time_text.set_text(f'Time: {estimated_mission_time/3600.0:.1f} hours')
 
             # Update mission status text based on events (event times are physical seconds)
             status = "Pre-launch"

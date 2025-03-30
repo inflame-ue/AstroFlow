@@ -91,13 +91,16 @@ def run_test_case(test_name, launch_pads, orbit_altitudes, satellite_config, eff
         
         # Show visualization of best run
         if best_sim_instance.tanker_mission_trajectory and len(best_sim_instance.tanker_mission_trajectory) > 1:
-            print(f"\nShowing visualization for '{test_name}' - optimal trajectory...")
+            gif_filename = f'{test_name.replace(" ", "_")}_optimal.gif'
+            print(f"\nSaving visualization for '{test_name}' - optimal trajectory as {gif_filename}...")
             try:
                 fig, ani = best_sim_instance.visualize()
-                plt.show(block=True)  # Show and wait for window to close
-                plt.close(fig)
+                # Save the animation as a GIF
+                ani.save(gif_filename, writer='pillow', fps=15) # Using pillow writer, adjust fps as needed
+                print(f"Successfully saved {gif_filename}")
+                plt.close(fig) # Close the plot figure to free memory
             except Exception as e:
-                print(f"Visualization failed: {e}")
+                print(f"Visualization failed or could not save GIF: {e}")
     
     return best_sim_instance, fuel_results
 
