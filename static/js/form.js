@@ -1,13 +1,3 @@
-// Create the PixiJS application
-const app = new PIXI.Application({
-    width: window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor: 0x000000,
-    resolution: window.devicePixelRatio || 1,  // Use 4 for 4K resolution
-    antialias: true,
-    autoDensity: true,
-});
-
 document.addEventListener('DOMContentLoaded', function () {
   const launchpadsContainer = document.getElementById('launchpadsContainer');
   const orbitsContainer = document.getElementById('orbitsContainer');
@@ -377,23 +367,6 @@ document.addEventListener('DOMContentLoaded', function () {
       formContainer.classList.remove('hidden');
       toggleBar.classList.remove('visible');
   });
-
-  // Create stars
-const stars = [];
-const numStars = 200;
-
-for (let i = 0; i < numStars; i++) {
-    const star = new PIXI.Graphics();
-    star.beginFill(0xFFFFFF);
-    star.drawCircle(0, 0, Math.random() * 2);
-    star.endFill();
-
-    star.x = Math.random() * app.screen.width;
-    star.y = Math.random() * app.screen.height;
-
-    stars.push(star);
-    app.stage.addChild(star);
-}
 
   // Function to update the summary content
   function updateSummary() {

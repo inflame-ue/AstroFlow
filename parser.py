@@ -10,14 +10,32 @@ def normalize_form_data(form_data: dict) -> dict:
         dict
 
     """
+    if not form_data or not isinstance(form_data, dict) or 'orbits' not in form_data:
+        return form_data
+        
     for key, value in form_data['orbits'].items():
-        try:    
-            if value['radius'] > 17000:
-                if value['radius'] > 42000:
-                    value['radius'] = 42000 # scale down to max radius
-                normalized_radius = 17000 + (value['radius'] - 17000) * (17000 / 42000)
-                value['radius'] = normalized_radius
+        try:
+            radius = float(value['radius'])
+            if radius > 17000:
+                if radius > 42000:
+                    radius = 42000  # scale down to max radius
+                normalized_radius = 17000 + (radius - 17000) * (17000 / 42000)
+                value['radius'] = str(normalized_radius)  # Convert back to string to match expected type
+            else:
+                value['radius'] = str(radius)
         except KeyError as e:
             print(f"Error while accessing radius: {e}")
-
+        except ValueError as e:
+            print(f"Error while converting radius to float: {e}")
+    
+    # Also need to update satellite radius values that reference these orbits
+    if 'satellites' in form_data:
+        for satellite in form_data['satellites'].values():
+            try:
+                orbit_id = satellite['orbitId']
+                if orbit_id in form_data['orbits']:
+                    satellite['radius'] = form_data['orbits'][orbit_id]['radius']
+            except KeyError as e:
+                print(f"Error while updating satellite radius: {e}")
+                
     return form_data
