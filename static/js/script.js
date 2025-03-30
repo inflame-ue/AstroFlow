@@ -217,16 +217,23 @@ for (let i = 0; i < numStars; i++) {
 
     star.x = Math.random() * app.screen.width;
     star.y = Math.random() * app.screen.height;
-
+    
+    // Add properties for smoother twinkling
+    star.twinkleSpeed = 0.01 + Math.random() * 0.03; // Varied slow speeds
+    star.twinklePhase = Math.random() * Math.PI * 2; // Random starting phase
+    
     stars.push(star);
     app.stage.addChild(star);
 }
 
 // Animation loop
 app.ticker.add((delta) => {
-    // Animate Stars
+    // Animate Stars with smoother twinkling
     stars.forEach(star => {
-        star.alpha = Math.random();
+        // Update phase and use sine wave for smooth alpha transitions
+        star.twinklePhase += star.twinkleSpeed * delta;
+        // Oscillate between 0.2 and 1.0 for visible but subtle twinkling
+        star.alpha = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(star.twinklePhase));
     });
 
     // Animate Satellites
