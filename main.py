@@ -72,14 +72,13 @@ def simulation():
     if form_data and ASTROALGO_AVAILABLE:
         print("Attempting to initialize and run simulation...")
         try:
-            # Tanker starts at Earth radius, angle will be set by launchpad choice
+            # tanker starts at Earth radius, angle will be set by launchpad choice
             tanker = Tanker(EARTH_RADIUS, 0, 0)
             sim = SimulateMission(EARTH_RADIUS, tanker)
 
             if 'launchpads' in form_data:
                 for lp_id, lp_data in form_data['launchpads'].items():
                     try:
-                        # assuming form uses 'angle1' and it's in degrees
                         angle_deg = float(lp_data.get('angle1', 0.0))
                         sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.deg2rad(angle_deg)))
                     except (ValueError, TypeError, KeyError) as e:
@@ -113,9 +112,7 @@ def simulation():
                         orbit_id_ref = sat_data.get('orbitId')
                         if orbit_id_ref in orbit_map:
                             target_orbit_obj = orbit_map[orbit_id_ref]
-                            # Assuming form angle is in degrees
                             angle_deg = float(sat_data.get('angle', 0.0))
-                            # Algorithm calculates speed internally based on orbit radius
                             sim.add_satellite(target_orbit_obj, np.deg2rad(angle_deg))
                         else:
                              print(f"Warning: Satellite {sat_id} references unknown orbit ID {orbit_id_ref}")
@@ -123,7 +120,7 @@ def simulation():
                         print(f"Skipping invalid satellite {sat_id}: {e}")
             
             print("Running simulate_mission()...")
-            sim.simulate_mission() # Execute the main algorithm
+            sim.simulate_mission()
             print("Simulation sequence complete.")
 
             # limit trajectory size for session storage if necessary
@@ -144,12 +141,12 @@ def simulation():
             with open('simulation_results.json', 'w') as f:
                 json.dump(simulation_results, f)
 
-        except ValueError as ve: # Catch specific configuration errors
+        except ValueError as ve: # catch specific configuration errors
              sim_error_message = f"Simulation setup error: {ve}"
              print(sim_error_message)
              status = 'error'
              message = sim_error_message
-        except Exception as e: # Catch runtime errors during simulation
+        except Exception as e: # catch runtime errors during simulation
              sim_error_message = f"Error during simulation run: {e}"
              print(sim_error_message)
              status = 'error'
