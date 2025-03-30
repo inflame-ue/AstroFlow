@@ -115,7 +115,7 @@ function createVisualization(textures) { // Remove formData parameter
             
             // Calculate radius and speed from the matching orbit
             const radius = parseFloat(orbitData.radius) * KM_TO_PIXEL_SCALE;
-            const angle = parseFloat(satData.angle) * (Math.PI / 180); // Convert degrees to radians
+            const angle = parseFloat(satData.angle - 90) * (Math.PI / 180); // Convert degrees to radians
             const speed = parseFloat(orbitData.speed) * 0.0001; // Scale speed appropriately
             
             console.log(`Creating satellite ${satId} at angle ${satData.angle}° in orbit ${orbitId} with radius ${radius}px`);
@@ -371,7 +371,6 @@ window.addEventListener('resize', () => {
         }
     });
 
-    // --- Regenerate Rocket Path on Resize --- 
     // Recalculate dynamic path [start_station, farthest_orbit_top] 
     if (earth && earth.parent) { 
         // 1. Clear old path and reset index
