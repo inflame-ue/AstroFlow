@@ -16,7 +16,7 @@ let rocketSprite = null;
 let simulationPath = []; // Store the raw simulation path data [[t, x, y], [t, x, y],...]
 let rocketPath = []; // Converted path with screen coordinates [{x, y}, {x, y},...]
 let currentPathIndex = 0;
-const ROCKET_SPEED = 2; // Base speed - can be adjusted
+const ROCKET_SPEED = 4 // Base speed - can be adjusted
 
 // Add a timestamp variable to track when we last logged
 let lastCoordinateLogTime = 0;

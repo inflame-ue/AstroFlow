@@ -106,7 +106,7 @@ export function animateCapsules(delta) {
         if (capsule.retrieving) {
             // Handle retrieval animation
             const retrievalTime = Date.now() - capsule.retrievalStartTime;
-            const animationDuration = 1500; // 1.5 seconds
+            const animationDuration = 800; // Reduced from 1500ms to 800ms for faster retrieval
             
             if (retrievalTime >= animationDuration) {
                 // Retrieval animation complete - remove capsule
@@ -143,7 +143,7 @@ export function animateCapsules(delta) {
             }
 
             // Animate Orbit
-            capsule.angle += capsule.speed * delta;
+            capsule.angle += capsule.speed * delta * 0.8; // Slightly slower orbital movement
 
             // Update position to stay on its orbit
             capsule.x = centerX + capsule.orbitRadius * Math.cos(capsule.angle);
