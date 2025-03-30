@@ -11,6 +11,11 @@ BASE_ORBITAL_SPEED_FACTOR = 0.02 # Increased speed factor
 LOWEST_ORBIT_RADIUS = EARTH_RADIUS + 200 # Reference radius for speed calculation
 MU = 398600.4418  # Earth's gravitational parameter (km³/s²). Adjust units as needed.
 
+# --- Fuel Estimation Constants (Highly Simplified) ---
+FUEL_MASS_PER_DELTA_V_KG_PER_KMS = 1500.0 # kg fuel / (km/s Delta-V)
+FUEL_DENSITY_KG_PER_LITER = 1.0        # kg / L (e.g., similar to water)
+# ----------------------------------------------------
+
 class Orbit:
     def __init__(self, radius: float, inclination: float = 0):
         self.radius = radius
@@ -123,6 +128,7 @@ class SimulateMission:
         # self.transfer_trajectories = [] # Will use tanker_mission_trajectory
         self.tanker_mission_trajectory = [] # Stores (time, x, y) points for the entire mission
         self.initial_launch_angle = None # Store the angle of the launch pad used
+        self.total_delta_v = 0.0 # Initialize total Delta-V (fuel proxy)
 
     def add_launch_pad(self, launch_pad: LaunchPad):
         self.launch_pads.append(launch_pad)
@@ -528,6 +534,15 @@ class SimulateMission:
         # Set final speed to the physical angular speed for the new circular orbit
         self.tanker.speed = (np.sqrt(MU / self.tanker.radius) / self.tanker.radius) if self.tanker.radius > 0 else 0
 
+        # --- Calculate Hohmann Transfer Delta-V (Fuel Proxy) ---
+        if transfer.transfer_time > 1e-9: # Only calculate if it was a real transfer
+            delta_v1 = abs(transfer.v_trans_1 - transfer.v1)
+            delta_v2 = abs(transfer.v2 - transfer.v_trans_2)
+            transfer_delta_v = delta_v1 + delta_v2
+            self.total_delta_v += transfer_delta_v
+            self.tanker.add_event(self.mission_clock, f"Hohmann transfer Delta-V: {transfer_delta_v:.3f} km/s ({delta_v1:.3f} + {delta_v2:.3f})")
+        # --- End Delta-V Calculation ---
+
         return transfer_trajectory_points
 
 
@@ -591,6 +606,14 @@ class SimulateMission:
 
         # Set tanker speed to physical angular velocity (rad/s)
         tanker.speed = (np.sqrt(MU / tanker.radius) / tanker.radius) if tanker.radius > 0 else 0
+
+        # --- Calculate Launch Delta-V (Fuel Proxy) ---
+        if tanker.radius > 0:
+            v_orbit = np.sqrt(MU / tanker.radius) # Circular orbit speed (km/s)
+            launch_delta_v = v_orbit # Delta-V from surface (0 speed) to orbit speed
+            self.total_delta_v += launch_delta_v
+            tanker.add_event(self.mission_clock, f"Launch maneuver Delta-V: {launch_delta_v:.3f} km/s")
+        # --- End Delta-V Calculation ---
 
         # Add mission event (time is physical seconds)
         tanker.add_event(self.mission_clock, f"Launched to orbit {final_radius:.1f} km at angle {target_angle:.2f} rad")
@@ -665,9 +688,17 @@ class SimulateMission:
         # Update tanker final position (landed)
         tanker.radius = self.planet_radius
         # Ensure final angle is exactly the target landing angle, overriding calculation drift
-        tanker.angle = target_landing_angle 
+        tanker.angle = target_landing_angle
         tanker.speed = 0 # Landed
         tanker.active = False # Tanker mission ends on landing
+
+        # --- Calculate Reentry Delta-V (Fuel Proxy) ---
+        if start_radius > 0:
+            v_orbit = np.sqrt(MU / start_radius) # Circular orbit speed before reentry (km/s)
+            reentry_delta_v = v_orbit # Delta-V to decelerate from orbit speed to (near) zero
+            self.total_delta_v += reentry_delta_v
+            tanker.add_event(self.mission_clock, f"Reentry maneuver Delta-V: {reentry_delta_v:.3f} km/s")
+        # --- End Delta-V Calculation ---
 
         # Add mission event (time is physical seconds)
         tanker.add_event(self.mission_clock, f"Successful reentry and landing at angle {target_landing_angle:.2f} rad")
@@ -831,6 +862,15 @@ class SimulateMission:
         elif index == -1:
             return f"Transfer Orbit (R={self.tanker.radius:.1f} km)"
         return "Unknown Orbit"
+
+    def get_total_fuel_liters(self):
+        """Calculate estimated fuel volume in liters based on total Delta-V."""
+        if FUEL_DENSITY_KG_PER_LITER <= 0:
+            print("Warning: Fuel density is non-positive, cannot calculate volume.")
+            return 0.0
+        fuel_mass_kg = self.total_delta_v * FUEL_MASS_PER_DELTA_V_KG_PER_KMS
+        fuel_liters = fuel_mass_kg / FUEL_DENSITY_KG_PER_LITER
+        return fuel_liters
 
     def simulate_mission(self):
         """Simulate the entire mission with multiple transfers and shuttle deployments"""
@@ -1277,6 +1317,8 @@ class SimulateMission:
         # Text display for mission time (seconds) and status
         time_text = ax.text(0.02, 0.98, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
         status_text = ax.text(0.02, 0.92, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
+        # Add text display for total Delta-V
+        delta_v_text = ax.text(0.02, 0.86, '', transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', fc='wheat', alpha=0.5))
 
         # Add legend
         handles, labels = ax.get_legend_handles_labels()
@@ -1298,6 +1340,7 @@ class SimulateMission:
             tanker_full_path_line.set_data([], [])
             time_text.set_text('')
             status_text.set_text('')
+            delta_v_text.set_text('') # Initialize Delta-V text
 
             for marker in satellite_markers:
                 marker.set_data([], [])
@@ -1306,7 +1349,7 @@ class SimulateMission:
             # for marker in shuttle_recovered_markers:
             #     marker.set_data([], [])
 
-            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text] + \
+            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text, delta_v_text] + \
                            satellite_markers + shuttle_active_markers #+ shuttle_recovered_markers
             return all_elements
 
@@ -1398,7 +1441,13 @@ class SimulateMission:
                      break # Events are ordered by time
             status_text.set_text(f'Status: {status}')
 
-            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text] + \
+            # Update total Delta-V text (always show the final calculated value)
+            # delta_v_text.set_text(f'Total ΔV: {self.total_delta_v:.2f} km/s') # Previous
+            # Update total Fuel text (using the helper method)
+            fuel_liters = self.get_total_fuel_liters()
+            delta_v_text.set_text(f'Fuel Used: {fuel_liters:,.0f} L') # Renamed the text element conceptually
+
+            all_elements = [tanker_marker, tanker_full_path_line, time_text, status_text, delta_v_text] + \
                            satellite_markers + shuttle_active_markers #+ shuttle_recovered_markers
             return all_elements
 
@@ -1418,71 +1467,119 @@ class SimulateMission:
 # --- Example Usage ---
 if __name__ == "__main__":
     print("Setting up mission simulation...")
-    # Create a tanker spacecraft (starts at Earth radius, angle 0 - will be updated by launch pad)
-    tanker = Tanker(EARTH_RADIUS, 0, 0)
 
-    # Create simulation environment
-    sim = SimulateMission(EARTH_RADIUS, tanker)
-
-    # Add launch pads
-    sim.add_launch_pad(LaunchPad(EARTH_RADIUS, 0))          # 0 degrees
-    sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.pi / 2)) # 90 degrees
-    # sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.pi))      # 180 degrees
-
-    # Add orbits (ensure significant separation)
+    # --- Define Common Mission Parameters ---
+    initial_launch_pads = [
+        LaunchPad(EARTH_RADIUS, 0),          # 0 degrees
+        LaunchPad(EARTH_RADIUS, np.pi / 2), # 90 degrees
+        # LaunchPad(EARTH_RADIUS, np.pi)      # 180 degrees
+    ]
     orbit_altitudes = [500, 3000, 8000] # Altitudes in km
-    orbits = [sim.add_orbit(EARTH_RADIUS + alt) for alt in orbit_altitudes]
-    print(f"Created {len(orbits)} orbits at altitudes: {orbit_altitudes} km")
+    initial_satellites_config = {
+        0: [np.deg2rad(0), np.deg2rad(120), np.deg2rad(240)], # Orbit 0 angles
+        1: [np.deg2rad(90), np.deg2rad(270)],               # Orbit 1 angles
+        2: [np.deg2rad(180)]                                # Orbit 2 angles
+    }
+    # ------------------------------------->
 
-    # Calculate physical orbital ANGULAR speeds (rad/s) - for info only now
-    orbital_angular_speeds = [(np.sqrt(MU / orb.radius) / orb.radius) if orb.radius > 0 else 0 for orb in orbits]
-    print(f"Physical orbital angular speeds (rad/s): {[f'{s:.4e}' for s in orbital_angular_speeds]}")
+    best_sim_instance = None
+    min_total_delta_v = float('inf')
+    best_launch_pad_angle = None
+    simulation_results = {} # Optional: Store all results if needed later
 
-    # Add satellites to orbits (don't need to pass speed factor anymore)
-    # Orbit 0 (Low)
-    sim.add_satellite(orbits[0], np.deg2rad(0))
-    sim.add_satellite(orbits[0], np.deg2rad(120))
-    sim.add_satellite(orbits[0], np.deg2rad(240))
-    # Orbit 1 (Medium)
-    sim.add_satellite(orbits[1], np.deg2rad(90))
-    sim.add_satellite(orbits[1], np.deg2rad(270))
-    # Orbit 2 (High)
-    sim.add_satellite(orbits[2], np.deg2rad(180))
-    print(f"Added {len(sim.satellites)} satellites across {len(orbits)} orbits.")
+    print(f"\nSimulating mission for {len(initial_launch_pads)} launch pads...")
+
+    for i, launch_pad in enumerate(initial_launch_pads):
+        print(f"\n--- Running Simulation for Launch Pad {i+1} (Angle: {launch_pad.angle:.2f} rad) ---")
+
+        # Create a fresh tanker and simulation environment for each run
+        # Note: Tanker initial angle (0) is irrelevant here, will be set by sim.simulate_mission
+        tanker = Tanker(EARTH_RADIUS, 0, 0)
+        sim = SimulateMission(EARTH_RADIUS, tanker)
+
+        # Add ONLY the current launch pad to this simulation instance
+        sim.add_launch_pad(launch_pad)
+
+        # Add orbits
+        orbits = [sim.add_orbit(EARTH_RADIUS + alt) for alt in orbit_altitudes]
+        # print(f"  Created {len(orbits)} orbits at altitudes: {orbit_altitudes} km") # Less verbose
+
+        # Add satellites to orbits for this simulation instance
+        satellite_count = 0
+        for orbit_idx, angles in initial_satellites_config.items():
+            if orbit_idx < len(orbits):
+                for angle in angles:
+                    sim.add_satellite(orbits[orbit_idx], angle)
+                    satellite_count += 1
+            else:
+                 print(f"  Warning: Orbit index {orbit_idx} out of range for satellite config.")
+        # print(f"  Added {satellite_count} satellites across {len(orbits)} orbits.") # Less verbose
 
 
-    # --- Run Simulation ---
-    print("\nStarting mission simulation sequence...")
-    try:
-        sim.simulate_mission()
-        print("\nMission simulation sequence complete.")
-    except Exception as e:
-        print(f"\n--- SIMULATION FAILED ---")
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
-        print("-------------------------")
-        # Optionally re-raise or exit
-        # raise e
+        # --- Run Simulation ---
+        print("  Starting mission simulation sequence...")
+        try:
+            # Reset simulation-specific state before each run
+            sim.mission_clock = 0.0
+            sim.total_delta_v = 0.0
+            sim.tanker_mission_trajectory = []
+            sim.tanker.mission_events = []
+            sim.tanker.shuttles_deployed = []
+            sim.tanker.shuttles_recovered = []
+            sim.tanker.active = True # Ensure tanker is reset to active
 
+            sim.simulate_mission()
+            print("  Mission simulation sequence complete.")
+            print(f"  Total Delta-V for this run: {sim.total_delta_v:.3f} km/s")
+            print(f"  Estimated Fuel Used: {sim.get_total_fuel_liters():,.0f} L") # Add fuel print
 
-    # --- Visualize ---
-    if sim.tanker_mission_trajectory and len(sim.tanker_mission_trajectory) > 1:
-         print("\nGenerating visualization...")
-         try:
-             fig, ani = sim.visualize()
-             # To save the animation, you might need ffmpeg installed:
-             # print("Saving animation (may take a while)...")
-             # ani.save('mission_animation.mp4', writer='ffmpeg', fps=30, dpi=150)
-             # print("Animation saved to mission_animation.mp4")
-             plt.show() # Display the animation window
-         except Exception as e:
-             print(f"\n--- VISUALIZATION FAILED ---")
-             print(f"An error occurred during visualization: {e}")
-             import traceback
-             traceback.print_exc()
-             print("----------------------------")
+            # Store results (optional)
+            simulation_results[launch_pad.angle] = (sim.total_delta_v, sim) # Store the instance
+
+            # Check if this is the best run so far
+            if sim.total_delta_v < min_total_delta_v:
+                min_total_delta_v = sim.total_delta_v
+                best_sim_instance = sim # Store the whole sim object
+                best_launch_pad_angle = launch_pad.angle
+
+        except Exception as e:
+            print(f"\n  --- SIMULATION FAILED (Launch Pad {i+1}) ---")
+            print(f"  An error occurred: {e}")
+            import traceback
+            traceback.print_exc(limit=2) # Limit traceback length
+            print("  --------------------------------------")
+            # Continue to the next launch pad
+
+    print("\n--- Simulation Runs Complete ---")
+
+    # --- Results Summary ---
+    if best_sim_instance:
+        print(f"Optimal Launch Pad Angle: {best_launch_pad_angle:.2f} rad")
+        print(f"Minimum Total Delta-V (Fuel Proxy): {min_total_delta_v:.3f} km/s")
+        print(f"Minimum Estimated Fuel: {best_sim_instance.get_total_fuel_liters():,.0f} L") # Add fuel summary
+
+        # --- Visualize Only the Best Run ---
+        if best_sim_instance.tanker_mission_trajectory and len(best_sim_instance.tanker_mission_trajectory) > 1:
+             print("\nGenerating visualization for the optimal trajectory...")
+             try:
+                 # Pass the best sim instance to visualize
+                 fig, ani = best_sim_instance.visualize() # Use the best sim instance directly
+                 # To save the animation, you might need ffmpeg installed:
+                 # print("Saving animation (may take a while)...")
+                 # ani.save('mission_animation_optimal.mp4', writer='ffmpeg', fps=30, dpi=150)
+                 # print("Animation saved to mission_animation_optimal.mp4")
+                 plt.show() # Display the animation window
+             except Exception as e:
+                 print(f"\n--- VISUALIZATION FAILED ---")
+                 print(f"An error occurred during visualization: {e}")
+                 import traceback
+                 traceback.print_exc()
+                 print("----------------------------")
+        else:
+             print("\nSkipping visualization: No valid tanker trajectory generated for the optimal run.")
+
     else:
-         print("\nSkipping visualization: No valid tanker trajectory generated.")
+        print("\nNo successful simulation runs completed. Cannot determine optimal launch or visualize.")
+
 
     print("\nSimulation finished.")
