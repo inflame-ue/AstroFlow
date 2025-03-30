@@ -4,6 +4,8 @@ import { app } from '../pixiApp.js';
 import { ROCKET_IMG_URL } from '../assets.js';
 import { getOrbitRadiiScaled } from '../simulationData.js';
 import { getFuelStations } from './fuelStations.js';
+import { createFlameContainer, addFlameParticle } from './flame.js';
+import { createCapsulesContainer, deployCapsule, resetCapsules } from './capsules.js';
 
 let rocketSprite = null;
 let rocketPath = []; // Array for rocket path coordinates {x, y}
@@ -55,10 +57,14 @@ function calculateRocketPath() {
 
 // Requires textures object
 export function createRocket(textures) {
-    console.log("Creating rocket...");
+    console.log("Creating rocket, flame container, and capsules container...");
     if (rocketSprite) {
         rocketSprite.destroy();
     }
+    // Create containers for effects (BEFORE rocket so they are visually behind if needed)
+    createFlameContainer(); 
+    createCapsulesContainer(textures); // Pass textures to capsules for its sprite
+    resetCapsules(); // Ensure deployment tracking is reset
 
     // Calculate path *after* stations/orbits exist
     rocketPath = calculateRocketPath();
@@ -131,13 +137,37 @@ export function animateRocket(delta, ROCKET_SPEED) {
            currentPathIndex = 1; // Mark as finished
            console.log("Rocket reached final destination (farthest orbit).");
        } else {
-           // Move towards the target point
-           const angle = Math.atan2(dy, dx);
+           // Still moving
+           const angle = Math.atan2(dy, dx); // Angle of movement
            rocketSprite.x += Math.cos(angle) * moveDistance;
            rocketSprite.y += Math.sin(angle) * moveDistance;
-           // Keep rotation fixed for straight path, it was set initially
+           // Keep rotation fixed towards target (set initially)
+
+           // --- Add Flame Particle ---
+           if (Math.random() < 0.6) { // Adjust frequency
+                 // Pass rocket's actual rotation, not movement angle
+                 addFlameParticle(rocketSprite.x, rocketSprite.y, rocketSprite.rotation);
+           }
+
+           // --- Check for Capsule Deployment ---
+           const centerX = app.screen.width / 2;
+           const centerY = app.screen.height / 2;
+           const rocketDistToCenter = Math.sqrt(
+               Math.pow(rocketSprite.x - centerX, 2) +
+               Math.pow(rocketSprite.y - centerY, 2)
+           );
+           
+           const orbitRadii = getOrbitRadiiScaled(); // Get current scaled radii
+           orbitRadii.forEach((orbitRadiusPx, orbitIndex) => {
+               const distToOrbit = Math.abs(rocketDistToCenter - orbitRadiusPx);
+               
+               // Deploy if crossing within threshold (e.g., 5 pixels)
+               if (distToOrbit < 5) { 
+                   deployCapsule(rocketSprite.x, rocketSprite.y, orbitRadiusPx, orbitIndex);
+               }
+           });
        }
-   }
+    }
 }
 
 
@@ -160,7 +190,8 @@ export function resizeRocket() {
              rocketSprite.visible = false;
          }
     }
-     console.log("Regenerated rocket path and reset rocket on resize.");
+    resetCapsules(); // Reset deployed status on resize
+    console.log("Regenerated rocket path and reset rocket/capsules on resize.");
 }
 
 // Getter

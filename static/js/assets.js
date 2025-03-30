@@ -22,17 +22,19 @@ export const EARTH_IMG_URL = getAbsoluteUrl(earthImageRelativeUrl);
 export const SATELLITE_IMG_URL = getAbsoluteUrl(satelliteImageRelativeUrl);
 export const GAS_STATION_IMG_URL = getAbsoluteUrl(gasStationImageRelativeUrl);
 export const ROCKET_IMG_URL = getAbsoluteUrl(rocketImageRelativeUrl);
+export const CAPSULE_IMG_URL = getAbsoluteUrl('/static/images/capsule.svg');
 
 // Function to load all assets
 // Requires PIXI global object
 export async function loadAssets() {
-    console.log("Loading assets:", EARTH_IMG_URL, SATELLITE_IMG_URL, GAS_STATION_IMG_URL, ROCKET_IMG_URL);
+    console.log("Loading assets:", EARTH_IMG_URL, SATELLITE_IMG_URL, GAS_STATION_IMG_URL, ROCKET_IMG_URL, CAPSULE_IMG_URL);
     try {
         const textures = await PIXI.Assets.load([
             EARTH_IMG_URL,
             SATELLITE_IMG_URL,
             GAS_STATION_IMG_URL,
-            ROCKET_IMG_URL
+            ROCKET_IMG_URL,
+            CAPSULE_IMG_URL
         ]);
         console.log("Assets loaded successfully.");
         return textures;
