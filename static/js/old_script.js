@@ -158,14 +158,12 @@ function createVisualization(textures) { // Remove formData parameter
                 fuelStation.rotation = stationAngleRadians + Math.PI / 2; // Rotate sprite base towards Earth center
                 
                 app.stage.addChild(fuelStation);
-                fuelStations.push(fuelStation); // Add to array
+                fuelStations.push(fuelStation);
             }
         });
     }
-    // --- End Fuel Station Sprites ---
 
     app.stage.addChild(earth); // Add earth first
-    // Add fuel stations 
     fuelStations.forEach(fs => app.stage.addChild(fs)); 
 
     // --- Calculate Rocket Path (Start Station to Farthest Orbit Top) ---
@@ -176,7 +174,6 @@ function createVisualization(textures) { // Remove formData parameter
     const centerX = app.screen.width / 2;
     const centerY = app.screen.height / 2;
 
-    // 1. Get Start Point (First Fuel Station)
     if (fuelStations.length > 0) {
         startPoint = { x: fuelStations[0].x, y: fuelStations[0].y };
         console.log("Rocket starting point (Fuel Station 0):", startPoint);
@@ -184,7 +181,6 @@ function createVisualization(textures) { // Remove formData parameter
         console.warn("No fuel stations found, cannot define rocket start point.");
     }
 
-    // 2. Get End Point (Top of Farthest Orbit)
     if (orbitRadiiScaled.length > 0) {
         const maxRadiusPx = Math.max(...orbitRadiiScaled);
         if (maxRadiusPx > 0) {
@@ -199,7 +195,6 @@ function createVisualization(textures) { // Remove formData parameter
         }
     }
 
-    // 3. Define the final path (if both points exist)
     if (startPoint && endPoint) {
         rocketPath = [startPoint, endPoint];
         console.log("Final rocket path defined:", rocketPath);
@@ -269,7 +264,7 @@ function createFallbackVisualization() {
     app.stage.addChild(fallbackEarth);
 }
 
-// Create stars
+
 const stars = [];
 const numStars = 200;
 
@@ -290,7 +285,6 @@ for (let i = 0; i < numStars; i++) {
     app.stage.addChild(star);
 }
 
-// Animation loop
 app.ticker.add((delta) => {
     // Animate Stars with smoother twinkling
     stars.forEach(star => {
@@ -300,14 +294,12 @@ app.ticker.add((delta) => {
         star.alpha = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(star.twinklePhase));
     });
 
-    // Animate Satellites
     satellites.forEach(sat => {
         sat.angle += sat.speed * delta; // Use delta for smoother animation
         sat.graphics.x = sat.radius * Math.cos(sat.angle);
         sat.graphics.y = sat.radius * Math.sin(sat.angle);
     });
 
-    // Animate Rocket
     if (rocket && rocket.visible && rocketPath.length === 2 && currentPathIndex === 0) {
         const targetPoint = rocketPath[1]; // Target the end point
         const dx = targetPoint.x - rocket.x;

@@ -4,9 +4,6 @@
 // PIXI should be globally available from the CDN script tag
 if (typeof PIXI === 'undefined') {
     console.error("PIXI is not defined. Make sure PixiJS is loaded before this script.");
-    // Provide a dummy app object to prevent further errors down the line
-    // Or throw an error
-    // throw new Error("PixiJS not loaded");
 }
 
 const app = new PIXI.Application({
@@ -19,5 +16,3 @@ const app = new PIXI.Application({
 });
 
 export { app };
-
-// We will handle appending the view in the main script after DOM load

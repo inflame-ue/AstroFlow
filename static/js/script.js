@@ -12,7 +12,6 @@ import { createRocket } from './visuals/rocket.js';
 import { startAnimationLoop } from './animation.js';
 import { setupResizeListener } from './resize.js';
 
-// --- Main Initialization Function ---
 async function initializeSimulation() {
     console.log("Initializing simulation...");
 
@@ -32,7 +31,6 @@ async function initializeSimulation() {
         loadAssets()
     ]);
 
-    // Check if loading failed
     if (!textures || Object.keys(textures).length === 0) {
         console.error("Asset loading failed. Cannot proceed.");
         // Optionally display an error message to the user
@@ -44,7 +42,6 @@ async function initializeSimulation() {
     console.log("Data loaded and assets loaded. Creating visuals...");
 
     // 3. Create Visual Elements (Order can matter for layering/dependencies)
-    // Background elements first
     createStars();
     createOrbits();
     createSatellites(textures);
@@ -69,7 +66,7 @@ async function initializeSimulation() {
     console.log("Simulation initialization complete.");
 }
 
-// --- Fallback Visualization ---
+
 function createFallbackVisualization() {
     console.warn("Creating fallback visualization due to errors.");
     // Simple blue circle for Earth
@@ -87,7 +84,6 @@ function createFallbackVisualization() {
 }
 
 
-// --- Run Initialization ---
 // Ensure DOM is ready before trying to access elements like canvas-container
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeSimulation);
