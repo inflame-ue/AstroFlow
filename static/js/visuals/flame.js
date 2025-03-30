@@ -22,7 +22,7 @@ export function addFlameParticle(rocketX, rocketY, rocketRotation) {
     // Calculate offset direction based on rocket's visual rotation
     // The direction opposite the rocket nose (rotation + PI)
     const flameDirectionAngle = rocketRotation + Math.PI; 
-    const offsetDistance = 10; // Reset offset distance for testing new angle
+    const offsetDistance = 5; // Reset offset distance for testing new angle
 
     const particleX = rocketX + Math.cos(flameDirectionAngle) * offsetDistance;
     const particleY = rocketY + Math.sin(flameDirectionAngle) * offsetDistance;
@@ -37,6 +37,7 @@ export function addFlameParticle(rocketX, rocketY, rocketRotation) {
     particle.x = particleX;
     particle.y = particleY;
     particle.alpha = 0.8 + Math.random() * 0.2; // Start bright
+    // particle.alpha = 0.8; // Start bright
     particle.lifespan = 15 + Math.random() * 15; // Frames until disappearing (15-30)
 
     flameTrailContainer.addChild(particle);
