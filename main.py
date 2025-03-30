@@ -3,27 +3,25 @@ from dotenv import load_dotenv
 from utils.parser import normalize_form_data
 import json
 import os
-import numpy as np # Needed for deg2rad
+import numpy as np # needed for deg2rad
 
-# --- Import from your algorithm ---
+
 try:
     from astroalgo.algorithm import SimulateMission, Tanker, LaunchPad, Orbit, Satellite, EARTH_RADIUS
     ASTROALGO_AVAILABLE = True
 except ImportError as e:
     print(f"WARNING: Could not import astroalgo. Simulation will not run. Error: {e}")
     ASTROALGO_AVAILABLE = False
-    # Define dummy classes if import fails, so the rest of the Flask app doesn't crash
+    # define dummy classes if import fails, so the rest of the Flask app doesn't crash
     class SimulateMission: pass
     class Tanker: pass
     class LaunchPad: pass
     class Orbit: pass
     class Satellite: pass
-    EARTH_RADIUS = 6378.137 # Provide a fallback value
+    EARTH_RADIUS = 6378.137
 
-# --- Load Environment Variables ---
 load_dotenv()
 app = Flask(__name__)
-
 # secret key for session
 app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
 
@@ -31,18 +29,17 @@ app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not wor
 def index():
     if request.method == 'POST':
         form_data = request.form.get('formData')
-        session.pop('form_data', None) # Clear previous data first
-        session.pop('simulation_results', None) # Clear previous results
+        session.pop('form_data', None) # clear previous data first
+        session.pop('simulation_results', None) # clear previous results
 
         if form_data:
             try:
                 data = json.loads(form_data)
-                # Normalize data using your parser
+                # normalize the orbit data
                 data_normalized = normalize_form_data(data)
-                if data_normalized: # Check if normalization didn't return None/empty
+                if data_normalized: # check if normalization didn't return None/empty
                     print("Normalized form data:", json.dumps(data_normalized, indent=2))
                     session['form_data'] = data_normalized # store data in session
-                    # Redirect with success status
                     return redirect(url_for('simulation', status='success'))
                 else:
                     print("Normalization failed or returned empty data.")
@@ -53,11 +50,9 @@ def index():
                 return redirect(url_for('simulation', status='error', message='Invalid form data format.'))
             except Exception as e:
                 print(f"Error processing form data: {e}")
-                # Optionally log the full traceback here
                 return redirect(url_for('simulation', status='error', message='Could not process form data.'))
         else:
              print("No form data received in POST request.")
-             # Redirect with warning/error if no data submitted
              return redirect(url_for('simulation', status='warning', message='No configuration data submitted.'))
 
     # For GET requests, clear old data and render the form
@@ -67,12 +62,11 @@ def index():
 
 @app.route('/simulation')
 def simulation():
-    # Data from session if available
     form_data = session.get('form_data', None)
     status = request.args.get('status')
     message = request.args.get('message')
-    simulation_results = None # Initialize results variabl``
-    sim_error_message = None # Specific error during simulation run
+    simulation_results = None # initialize results variable
+    sim_error_message = None # specific error during simulation run
 
     print(f"ASTROALGO_AVAILABLE: {ASTROALGO_AVAILABLE}")
     if form_data and ASTROALGO_AVAILABLE:
@@ -145,7 +139,7 @@ def simulation():
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
             }
-                        
+
             # write simulation results to file
             with open('simulation_results.json', 'w') as f:
                 json.dump(simulation_results, f)
