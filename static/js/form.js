@@ -369,10 +369,10 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
           // Display the summary
-          summaryContent.textContent = JSON.stringify(formDataObj, null, 2);
-          formSummary.style.display = 'block';
+          //   summaryContent.textContent = JSON.stringify(formDataObj, null, 2);
+          //   formSummary.style.display = 'block';
 
-          console.log('Form Data:', formDataObj);
+          //   console.log('Form Data:', formDataObj);
           
           // Visual feedback - hide form and show toggle bar
           const formContainer = document.querySelector('.form-container');
