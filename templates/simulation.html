@@ -47,6 +47,7 @@
     </script>
     {% endif %}
     
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <!-- Include your main script AS A MODULE -->
+    <script type="module" src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html> 
