@@ -4,6 +4,8 @@ import { app } from './pixiApp.js';
 import { animateStars } from './visuals/stars.js';
 import { animateSatellites } from './visuals/satellites.js';
 import { animateRocket } from './visuals/rocket.js';
+import { animateFlameParticles } from './visuals/flame.js'; // Import flame animation
+import { animateCapsules } from './visuals/capsules.js'; // Import capsule animation
 import { ROCKET_SPEED } from './constants.js'; // Import rocket speed
 
 let tickerHandler = null;
@@ -20,6 +22,8 @@ export function startAnimationLoop() {
         animateStars(delta);
         animateSatellites(delta);
         animateRocket(delta, ROCKET_SPEED); // Pass speed
+        animateFlameParticles(delta); // Add flame animation call
+        animateCapsules(delta); // Add capsule animation call
     };
 
     app.ticker.add(tickerHandler);
