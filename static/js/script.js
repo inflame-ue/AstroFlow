@@ -83,7 +83,7 @@ function createFallbackVisualization() {
     setupResizeListener(); // Allow resizing
 }
 
-
+// --- Run Initialization ---
 // Ensure DOM is ready before trying to access elements like canvas-container
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeSimulation);

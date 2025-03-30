@@ -10,7 +10,7 @@ import {
 } from '../simulationData.js';
 import { getFuelStations } from './fuelStations.js';
 import { createFlameContainer, addFlameParticle } from './flame.js';
-import { createCapsulesContainer, deployCapsule, resetCapsules } from './capsules.js';
+import { createCapsulesContainer, deployCapsule, resetCapsules, retrieveCapsule } from './capsules.js';
 
 let rocketSprite = null;
 let simulationPath = []; // Store the raw simulation path data [[t, x, y], [t, x, y],...]
@@ -20,6 +20,12 @@ const ROCKET_SPEED = 2; // Base speed - can be adjusted
 
 // Add a timestamp variable to track when we last logged
 let lastCoordinateLogTime = 0;
+
+// Add these variables near the top of your file with the other declarations
+let currentSimTime = 0; // Current simulation time in seconds
+let lastSimTime = 0; // Track last simulation time to avoid duplicate events
+let pendingEvents = []; // Store processed event triggers
+let processedEvents = new Set(); // Track which events have been processed
 
 // Add missing function for fallback rocket graphic
 function createFallbackRocketGraphic() {
@@ -126,6 +132,9 @@ export function createRocket(textures) {
     createCapsulesContainer(textures); // Pass textures to capsules for its sprite
     resetCapsules(); // Ensure deployment tracking is reset
 
+    // Process event data for capsules
+    processSimulationEvents();
+
     // Calculate path *after* stations/orbits exist
     rocketPath = convertSimulationPathToScreenCoordinates();
     currentPathIndex = 0; // Reset index
@@ -175,10 +184,22 @@ export function animateRocket(delta) {
         return;
     }
     
-    // Log coordinates once per second
+    // Update simulation time based on path progress
+    const pathProgress = currentPathIndex / (rocketPath.length - 1);
+    const simDuration = 62500; // Total duration from events (approx 62473s)
+    const prevSimTime = currentSimTime;
+    currentSimTime = pathProgress * simDuration;
+    
+    // Only check events if time has advanced
+    if (currentSimTime > lastSimTime) {
+        checkEventsTriggers();
+        lastSimTime = currentSimTime;
+    }
+    
+    // Log coordinates and simulation time once per second
     const currentTime = Date.now();
-    if (currentTime - lastCoordinateLogTime >= 1000) { // 1000ms = 1 second
-        console.log(`Rocket coordinates: x=${Math.round(rocketSprite.x)}, y=${Math.round(rocketSprite.y)}`);
+    if (currentTime - lastCoordinateLogTime >= 1000) {
+        console.log(`Rocket: x=${Math.round(rocketSprite.x)}, y=${Math.round(rocketSprite.y)}, simTime=${Math.round(currentSimTime)}s, progress=${Math.round(pathProgress*100)}%`);
         lastCoordinateLogTime = currentTime;
     }
     
@@ -217,25 +238,110 @@ export function animateRocket(delta) {
         if (Math.random() < 0.6) {
             addFlameParticle(rocketSprite.x, rocketSprite.y, rocketSprite.rotation);
         }
-
-        // --- Check for Capsule Deployment ---
-        const centerX = app.screen.width / 2;
-        const centerY = app.screen.height / 2;
-        const rocketDistToCenter = Math.sqrt(
-            Math.pow(rocketSprite.x - centerX, 2) +
-            Math.pow(rocketSprite.y - centerY, 2)
-        );
-        
-        const orbitRadii = getOrbitRadiiScaled();
-        orbitRadii.forEach((orbitRadiusPx, orbitIndex) => {
-            const distToOrbit = Math.abs(rocketDistToCenter - orbitRadiusPx);
-            
-            // Deploy if crossing within threshold (e.g., 5 pixels)
-            if (distToOrbit < 5) { 
-                deployCapsule(rocketSprite.x, rocketSprite.y, orbitRadiusPx, orbitIndex);
-            }
-        });
     }
+}
+
+// Add this function to check for events based on simulation time
+function checkEventsTriggers() {
+    pendingEvents.forEach(event => {
+        // Only process events that haven't been handled yet and are due
+        if (!processedEvents.has(event.id) && currentSimTime >= event.time) {
+            console.log(`Processing event at sim time ${Math.round(currentSimTime)}s: ${event.description}`);
+            
+            if (event.action === "deploy") {
+                // Handle capsule deployment
+                const orbitRadii = getOrbitRadiiScaled();
+                if (orbitRadii && orbitRadii.length > event.orbitIndex) {
+                    const orbitRadius = orbitRadii[event.orbitIndex];
+                    console.log(`Deploying capsule at orbit ${event.orbitIndex}`);
+                    deployCapsule(rocketSprite.x, rocketSprite.y, orbitRadius, event.orbitIndex);
+                }
+            } 
+            else if (event.action === "retrieve") {
+                console.log(`Retrieving capsule from orbit ${event.orbitIndex}`);
+                retrieveCapsule(event.orbitIndex);
+            }
+            
+            // Mark as processed
+            processedEvents.add(event.id);
+        }
+    });
+}
+
+// Update the processSimulationEvents function
+function processSimulationEvents() {
+    pendingEvents = [];
+    const results = getSimResults();
+    
+    if (!results || !results.events || !Array.isArray(results.events)) {
+        console.warn("No valid events found in simulation results");
+        return;
+    }
+    
+    console.log(`Processing ${results.events.length} simulation events`);
+    
+    // Process each event to find capsule actions
+    results.events.forEach((event, index) => {
+        if (!Array.isArray(event) || event.length < 2) return;
+        
+        const time = parseFloat(event[0]);
+        const description = event[1];
+        
+        if (isNaN(time)) return;
+        
+        console.log(`Checking event: [${time}] ${description}`);
+        
+        let actionType = null;
+        let orbitIndex = -1;
+        
+        // First check for "(Index X)" pattern
+        const orbitIndexMatch = description.match(/orbit \d+[\d.]+ km \(Index (\d+)\)/i);
+        if (orbitIndexMatch && orbitIndexMatch.length > 1) {
+            orbitIndex = parseInt(orbitIndexMatch[1]);
+            console.log(`Found orbit index in description: ${orbitIndex}`);
+        } else {
+            // Try to extract orbit radius and infer index
+            const orbitRadiusMatch = description.match(/orbit (\d+[\d.]+) km/i);
+            if (orbitRadiusMatch && orbitRadiusMatch.length > 1) {
+                const radius = parseFloat(orbitRadiusMatch[1]);
+                console.log(`Extracted orbit radius: ${radius}km`);
+                
+                // Map known radii to indices based on your simulation
+                if (radius === 8000.0) orbitIndex = 0;
+                else if (radius === 11000.0) orbitIndex = 1;
+                else if (radius === 17000.0) orbitIndex = 2;
+                
+                console.log(`Inferred orbit index ${orbitIndex} from radius ${radius}`);
+            }
+        }
+        
+        // Determine action type based on event description
+        if (description.includes("Deployed shuttle") && orbitIndex >= 0) {
+            actionType = "deploy";
+            console.log(`Found deployment event at ${time}s for orbit ${orbitIndex}`);
+        } else if (description.includes("Recovered shuttle") && orbitIndex >= 0) {
+            actionType = "retrieve";
+            console.log(`Found retrieval event at ${time}s for orbit ${orbitIndex}`);
+        }
+        
+        if (actionType) {
+            pendingEvents.push({
+                id: `${actionType}-${orbitIndex}-${index}`,
+                time,
+                action: actionType,
+                orbitIndex,
+                description
+            });
+        }
+    });
+    
+    pendingEvents.sort((a, b) => a.time - b.time);
+    console.log(`Found ${pendingEvents.length} capsule-related events:`, pendingEvents);
+    
+    // Reset tracking variables
+    currentSimTime = 0;
+    lastSimTime = 0;
+    processedEvents.clear();
 }
 
 export function resizeRocket() {
@@ -268,3 +374,6 @@ export function resizeRocket() {
 export function getRocketSprite() {
     return rocketSprite;
 }
+
+// Add this to make the function accessible without causing circular imports
+window.getRocketSprite = getRocketSprite;
