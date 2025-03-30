@@ -26,13 +26,32 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
           <div class="form-row">
               <div class="form-group">
-                  <label for="launchpad${id}Angle1">Angle <span class="unit">(degrees)</span></label>
+                  <label for="launchpad${id}Angle1">Primary Angle <span class="unit">(degrees)</span></label>
                   <input type="number" id="launchpad${id}Angle1" name="launchpad[${id}][angle1]" min="0" max="360" step="0.1" placeholder="e.g., 93.0" required>
+              </div>
+          </div>
+          <div class="add-field-btn" id="addSecondAngle${id}">+ Add Secondary Angle</div>
+          <div class="form-row hidden-field" id="secondAngleField${id}">
+              <div class="form-group">
+                  <label for="launchpad${id}Angle2">Secondary Angle <span class="unit">(degrees)</span></label>
+                  <input type="number" id="launchpad${id}Angle2" name="launchpad[${id}][angle2]" min="0" max="90" step="0.1" placeholder="e.g., 15.0">
               </div>
           </div>
       `;
 
       launchpadsContainer.appendChild(launchpadDiv);
+
+      // Add event listener for primary angle input
+      const primaryAngleInput = document.getElementById(`launchpad${id}Angle1`);
+      primaryAngleInput.addEventListener('focus', function() {
+          document.getElementById(`addSecondAngle${id}`).classList.add('active');
+      });
+      
+      primaryAngleInput.addEventListener('blur', function() {
+          if (!this.value) {
+              document.getElementById(`addSecondAngle${id}`).classList.remove('active');
+          }
+      });
 
       // Add remove button event listener
       document.getElementById(`removeLaunchpad${id}`).addEventListener('click', function() {
@@ -41,6 +60,13 @@ document.addEventListener('DOMContentLoaded', function () {
           } else {
               alert('You need at least one launchpad.');
           }
+      });
+
+      // Add event listener for the secondary angle button
+      document.getElementById(`addSecondAngle${id}`).addEventListener('click', function() {
+          document.getElementById(`secondAngleField${id}`).classList.remove('hidden-field');
+          document.getElementById(`secondAngleField${id}`).classList.add('visible-field');
+          this.style.display = 'none';
       });
 
       return launchpadDiv;
@@ -308,17 +334,11 @@ document.addEventListener('DOMContentLoaded', function () {
               redirect: 'follow' // Allow the browser to follow redirects
           })
           .then(response => {
-              if (!response.ok && !response.redirected) {
+              if (!response.ok) {
                   throw new Error(`Form submission failed: ${response.status} ${response.statusText}`);
               }
-              
-              // Check if response is a redirect and manually navigate to simulation page
-              if (response.redirected) {
-                  window.location.href = response.url;
-              } else {
-                  // If for some reason it wasn't redirected, go to simulation anyway
-                  window.location.href = '/simulation';
-              }
+              // The server will handle the redirect to simulation page
+              // The browser will automatically follow the redirect
           })
           .catch(error => {
               console.error('Error submitting form:', error);
