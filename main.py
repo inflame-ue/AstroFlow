@@ -154,7 +154,7 @@ def simulation():
                 "events": sim.tanker.mission_events # List of (time, description) tuples
                 # Add any other summary data you want here
             }
-            print(f"Simulation results: {len(simulation_results['trajectory'])}")
+            session['simulation_results'] = simulation_results
             # Optionally store results back in session if needed by other pages/requests
             # session['simulation_results'] = simulation_results
 
@@ -214,7 +214,7 @@ def get_form_data():
 
 @app.route('/api/simulation_results')
 def get_simulation_results():
-    simulation_results = session.get('simulation_results')
+    simulation_results = session.get('simulation_results', None)
     return jsonify(simulation_results if simulation_results else {})
 
 
