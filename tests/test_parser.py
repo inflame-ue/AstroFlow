@@ -127,6 +127,7 @@ class TestNormalizeFormData(unittest.TestCase):
         normalized_data = normalize_form_data(copy.deepcopy(input_data))
         self.assertEqual(normalized_data, expected_output)
 
+    # noinspection PyTypeChecker
     def test_none_input(self):
         """Test behavior with None input."""
         input_data = None

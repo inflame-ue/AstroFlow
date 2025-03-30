@@ -2,7 +2,7 @@
 
 import { app } from './pixiApp.js';
 import { loadAssets } from './assets.js';
-import { loadAndProcessSimulationData, getSimData } from './simulationData.js';
+import { loadAndProcessSimulationData } from './simulationData.js';
 import { createStars } from './visuals/stars.js';
 import { createEarth } from './visuals/earth.js';
 import { createOrbits } from './visuals/orbits.js';

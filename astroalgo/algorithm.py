@@ -1,9 +1,6 @@
-import numpy as np
-import math
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Wedge
-import time
 
 EARTH_RADIUS = 6378.137  # km
 # BASE_ORBITAL_SPEED_FACTOR = 0.001 # Reduced speed factor
@@ -94,7 +91,7 @@ class HohmannTransfer:
             self.e = abs(r2 - r1) / (r1 + r2)
             self.MU = MU  # Use the global MU constant
             # Transfer time (half-period) using Kepler's Third Law
-            # Ensure a is positive before sqrt
+            # Ensure an is positive before sqrt
             if self.a <= 0:
                  raise ValueError(f"Invalid semi-major axis {self.a} for transfer from {r1} to {r2}")
             self.transfer_time = np.pi * np.sqrt(self.a**3 / self.MU)  # Corrected with MU
@@ -530,7 +527,7 @@ class SimulateMission:
             current_radius = start_radius + t * (final_radius - start_radius)
 
             # Interpolate angle from launch angle towards target angle in orbit
-            # Ensure shortest path interpolation for angle
+            # Ensure the shortest path interpolation for angle
             delta_angle = target_angle - start_angle
             delta_angle = (delta_angle + np.pi) % (2 * np.pi) - np.pi # Normalize to [-pi, pi]
             current_angle = (start_angle + t * delta_angle) % (2 * np.pi)
@@ -580,7 +577,7 @@ class SimulateMission:
         return launch_trajectory_points # Return points
 
     def simulate_reentry(self, tanker: Tanker, target_landing_angle: float):
-        """Simulate reentry from lowest orbit to planet surface (time in seconds)"""
+        """Simulate reentry from the lowest orbit to planet surface (time in seconds)"""
         # Start position in orbit
         start_radius = tanker.radius
         start_angle = tanker.angle % (2 * np.pi)
@@ -701,7 +698,6 @@ class SimulateMission:
         if radius_diff > 10.0 or angle_diff > np.deg2rad(5): # Tolerances (e.g., 10km, 5 degrees)
             print(f"Warning: Tanker not close enough to recover shuttle {shuttle.id}. R diff: {radius_diff:.1f}, Angle diff: {np.rad2deg(angle_diff):.1f} deg")
             # Optionally, proceed anyway or return False
-            # return False # Stricter check
 
         print(f"Recovering shuttle {shuttle.id}...")
         shuttle.intercepted = True
@@ -950,7 +946,7 @@ class SimulateMission:
         )
 
         # Start descent from the current orbit (should be highest)
-        # The loop iterates while current_orbit_idx > 0, handling transfers to orbits [N-1 .. 1]
+        # The loop iterates while current_orbit_idx > 0, handling transfers to orbits [N-1...1]
         while current_orbit_idx > 0:
             print(f"\nPlanning return transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to orbit {self.orbit_index_to_string(current_orbit_idx - 1)}...")
 

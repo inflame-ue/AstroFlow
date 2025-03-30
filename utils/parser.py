@@ -1,6 +1,6 @@
 def normalize_form_data(form_data: dict) -> dict:
     """
-    The simulation enforces speficic scaling of the radius for it to display correctly.
+    The simulation enforces specific scaling of the radius for it to display correctly.
     This function takes form data on input and normalizes the radius to the simulation's requirements.
     Based on the following formula: normalized_radius = 17000 + (radius - 17000) * (17000 / 42000)
 
