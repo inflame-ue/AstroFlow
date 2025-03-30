@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session # type: ignore
 from dotenv import load_dotenv
-from parser import normalize_form_data
+from utils.parser import normalize_form_data
 import json
 import os
 
@@ -19,7 +19,6 @@ def index():
             try:
                 data = json.loads(form_data)
                 data = normalize_form_data(data)
-                print(data)
                 session['form_data'] = data # store data in session for use in simulation
                 return redirect(url_for('simulation'))
             except Exception as e:
@@ -40,7 +39,6 @@ def simulation():
 @app.route('/api/form_data')
 def get_form_data():
     form_data = session.get('form_data')
-    print(form_data)
     return jsonify(form_data)
 
 
