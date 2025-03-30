@@ -78,17 +78,14 @@ def simulation():
     if form_data and ASTROALGO_AVAILABLE:
         print("Attempting to initialize and run simulation...")
         try:
-            # --- Initialize Simulation from Form Data ---
-            # 1. Create Tanker and Sim objects
             # Tanker starts at Earth radius, angle will be set by launchpad choice
             tanker = Tanker(EARTH_RADIUS, 0, 0)
             sim = SimulateMission(EARTH_RADIUS, tanker)
 
-            # 2. Add Launch Pads
             if 'launchpads' in form_data:
                 for lp_id, lp_data in form_data['launchpads'].items():
                     try:
-                        # Assuming form uses 'angle1' and it's in degrees
+                        # assuming form uses 'angle1' and it's in degrees
                         angle_deg = float(lp_data.get('angle1', 0.0))
                         sim.add_launch_pad(LaunchPad(EARTH_RADIUS, np.deg2rad(angle_deg)))
                     except (ValueError, TypeError, KeyError) as e:
@@ -97,10 +94,9 @@ def simulation():
             if not sim.launch_pads:
                  raise ValueError("No valid launch pads configured.")
 
-            # 3. Add Orbits (and map internal ID to Orbit object)
             orbit_map = {}
             if 'orbits' in form_data:
-                 # Sort by radius to ensure algorithm processes them correctly if needed
+                 # sort by radius to ensure algorithm processes them correctly if needed
                  sorted_orbit_items = sorted(
                      form_data['orbits'].items(),
                      key=lambda item: float(item[1].get('radius', 'inf'))
@@ -117,7 +113,6 @@ def simulation():
             if not sim.orbits:
                  raise ValueError("No valid orbits configured.")
 
-            # 4. Add Satellites to their respective orbits
             if 'satellites' in form_data:
                  for sat_id, sat_data in form_data['satellites'].items():
                     try:
@@ -132,19 +127,16 @@ def simulation():
                              print(f"Warning: Satellite {sat_id} references unknown orbit ID {orbit_id_ref}")
                     except (ValueError, TypeError, KeyError) as e:
                         print(f"Skipping invalid satellite {sat_id}: {e}")
-            # --- End Initialization ---
-
-            # --- Run the Simulation ---
+            
             print("Running simulate_mission()...")
             sim.simulate_mission() # Execute the main algorithm
             print("Simulation sequence complete.")
 
-            # --- Store Results (Example: trajectory and events) ---
-            # Limit trajectory size for session storage if necessary
+            # limit trajectory size for session storage if necessary
             max_traj_points = 5000
             trajectory_data = sim.tanker_mission_trajectory
             if len(trajectory_data) > max_traj_points:
-                 # Sample the trajectory to reduce size
+                 # sample the trajectory to reduce size
                  step = len(trajectory_data) // max_traj_points
                  trajectory_data = trajectory_data[::step]
 
@@ -152,41 +144,35 @@ def simulation():
             simulation_results = {
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
-                # Add any other summary data you want here
             }
-            session['simulation_results'] = simulation_results
-            # Optionally store results back in session if needed by other pages/requests
-            # session['simulation_results'] = simulation_results
+            
+            # write simulation results to file
+            with open('simulation_results.json', 'w') as f:
+                json.dump(simulation_results, f)
 
         except ValueError as ve: # Catch specific configuration errors
              sim_error_message = f"Simulation setup error: {ve}"
              print(sim_error_message)
-             status = 'error' # Update status for template
+             status = 'error'
              message = sim_error_message
         except Exception as e: # Catch runtime errors during simulation
              sim_error_message = f"Error during simulation run: {e}"
              print(sim_error_message)
-             # Optionally log traceback here
-             # import traceback
-             # traceback.print_exc()
-             status = 'error' # Update status for template
+             status = 'error'
              message = sim_error_message
-
     elif not ASTROALGO_AVAILABLE:
         status = 'error'
         message = 'Simulation algorithm module (astroalgo) could not be loaded.'
     elif not form_data:
-         # This case might be hit if user navigates directly to /simulation
          status = 'warning'
          message = 'No configuration data loaded. Please submit the form first.'
 
 
-    # Pass necessary data to the template
     return render_template('simulation.html',
-                           form_data=form_data, # Pass original form data for display
+                           form_data=form_data, # pass original form data for display
                            status=status,
                            message=message,
-                           simulation_results=simulation_results # Pass simulation output
+                           simulation_results=simulation_results # pass simulation output
                            )
 
 
@@ -208,13 +194,13 @@ def internal_server_error(e):
 
 @app.route('/api/form_data')
 def get_form_data():
-    # This endpoint remains useful for JavaScript to fetch data if needed
     form_data = session.get('form_data')
     return jsonify(form_data if form_data else {})
 
 @app.route('/api/simulation_results')
 def get_simulation_results():
-    simulation_results = session.get('simulation_results', None)
+    with open('simulation_results.json', 'r') as f:
+        simulation_results = json.load(f)
     return jsonify(simulation_results if simulation_results else {})
 
 
