@@ -17,6 +17,10 @@ let satellitesContainer; // Container for satellites
 let fuelStations = []; // Fix: Initialize as empty array
 let orbitRadiiScaled = []; // Fix: Initialize as empty array
 const satellites = []; // Array to hold satellite data
+let rocket; // Declare rocket variable
+let rocketPath = []; // Array for rocket path coordinates {x, y}
+let currentPathIndex = 0;
+const rocketSpeed = 2; // Pixels per frame, adjust as needed
 
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
@@ -32,8 +36,9 @@ let earthImageRelativeUrl = document.body.getAttribute('data-earth-image-url') |
 const earthImageUrl = origin + earthImageRelativeUrl;
 const satelliteImageUrl = origin + '/static/images/satellite.png';
 const gasStationImageUrl = origin + '/static/images/gas_station.svg';
+const rocketImageUrl = origin + '/static/images/rocket.svg'; // Add rocket image URL
 
-console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl);
+console.log("Using image URLs:", earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl);
 
 // Fetch form data and process it
 fetch('/api/form_data')
@@ -50,7 +55,7 @@ fetch('/api/form_data')
         }
         
         // Load assets and create visualization after we have the data
-        return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl])
+        return PIXI.Assets.load([earthImageUrl, satelliteImageUrl, gasStationImageUrl, rocketImageUrl])
             .then((textures) => {
                 // Now we have both data and textures, create the visualization
                 createVisualization(formData, textures);
@@ -127,6 +132,23 @@ function createVisualization(formData, textures) {
     // Add Earth last so it's on top of orbits and satellites
     app.stage.addChild(earth);
 
+    // --- Generate Rocket Path (Example: Ellipse around Earth) ---
+    // This needs to run AFTER Earth is created to know its radius
+    const centerX = app.screen.width / 2;
+    const centerY = app.screen.height / 2;
+    const earthRadiusPx = earth.height / 2;
+    const pathPoints = 500;
+    const ellipseSemiMajor = earthRadiusPx * 2.5; // Make ellipse larger than earth
+    const ellipseSemiMinor = earthRadiusPx * 1.5;
+    
+    for (let i = 0; i < pathPoints; i++) {
+        const angle = (i / pathPoints) * 2 * Math.PI;
+        const x = centerX + ellipseSemiMajor * Math.cos(angle);
+        const y = centerY + ellipseSemiMinor * Math.sin(angle);
+        rocketPath.push({ x, y });
+    }
+    console.log("Generated rocket path with", rocketPath.length, "points.");
+
     // --- Create Fuel Station Sprites from Launchpads ---
     if (formData && formData.launchpads) {
         Object.values(formData.launchpads).forEach(launchpad => {
@@ -152,6 +174,24 @@ function createVisualization(formData, textures) {
         });
     }
     // --- End Fuel Station Sprites ---
+
+    // --- Create Rocket Sprite ---
+    rocket = new PIXI.Sprite(textures[rocketImageUrl]);
+    rocket.anchor.set(0.5); // Anchor at center
+    rocket.scale.set(0.05); // Adjust scale as needed
+
+    // Place rocket at the start of the path
+    if (rocketPath.length > 0) {
+        rocket.x = rocketPath[0].x;
+        rocket.y = rocketPath[0].y;
+    } else {
+        // Default position if path is empty
+        rocket.x = centerX + ellipseSemiMajor;
+        rocket.y = centerY;
+    }
+    
+    app.stage.addChild(rocket);
+    console.log("Rocket created at:", rocket.x, rocket.y);
 }
 
 function createFallbackVisualization() {
@@ -191,10 +231,38 @@ app.ticker.add((delta) => {
 
     // Animate Satellites
     satellites.forEach(sat => {
-        sat.angle += sat.speed; // Increment angle by speed
+        sat.angle += sat.speed * delta; // Use delta for smoother animation
         sat.graphics.x = sat.radius * Math.cos(sat.angle);
         sat.graphics.y = sat.radius * Math.sin(sat.angle);
     });
+
+    // Animate Rocket
+    if (rocket && rocketPath.length > 0) {
+        const targetPoint = rocketPath[currentPathIndex];
+        const dx = targetPoint.x - rocket.x;
+        const dy = targetPoint.y - rocket.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < rocketSpeed * delta) { 
+            // Reached the target point (or very close)
+            rocket.x = targetPoint.x;
+            rocket.y = targetPoint.y;
+            currentPathIndex = (currentPathIndex + 1) % rocketPath.length; // Move to next point (loop)
+            
+            // Set rotation towards the *next* target point for smoother turns
+            const nextTargetPoint = rocketPath[currentPathIndex];
+            const nextDx = nextTargetPoint.x - rocket.x;
+            const nextDy = nextTargetPoint.y - rocket.y;
+            rocket.rotation = Math.atan2(nextDy, nextDx) + Math.PI / 2; // Point forward (+90 deg adjust)
+
+        } else {
+            // Move towards the target point
+            const angle = Math.atan2(dy, dx);
+            rocket.x += Math.cos(angle) * rocketSpeed * delta;
+            rocket.y += Math.sin(angle) * rocketSpeed * delta;
+            rocket.rotation = angle + Math.PI / 2; // Point forward (+90 deg adjust)
+        }
+    }
 });
 
 // Handle window resize
@@ -236,4 +304,26 @@ window.addEventListener('resize', () => {
             star.y = Math.random() * app.screen.height;
         }
     });
+
+    // --- Regenerate Rocket Path on Resize --- 
+    // Recalculate path based on new screen size and Earth position
+    if (earth && earth.parent) {
+        const earthRadiusPx = earth.height / 2;
+        const pathPoints = 500;
+        const ellipseSemiMajor = earthRadiusPx * 2.5;
+        const ellipseSemiMinor = earthRadiusPx * 1.5;
+        rocketPath = []; // Clear old path
+        for (let i = 0; i < pathPoints; i++) {
+            const angle = (i / pathPoints) * 2 * Math.PI;
+            const x = centerX + ellipseSemiMajor * Math.cos(angle);
+            const y = centerY + ellipseSemiMinor * Math.sin(angle);
+            rocketPath.push({ x, y });
+        }
+        // Optionally reset rocket position to start of new path
+        // if (rocket && rocketPath.length > 0 && currentPathIndex < rocketPath.length) {
+        //     rocket.x = rocketPath[currentPathIndex].x; 
+        //     rocket.y = rocketPath[currentPathIndex].y;
+        // }
+        console.log("Regenerated rocket path on resize.");
+    } 
 });
