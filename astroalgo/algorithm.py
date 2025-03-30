@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
+import math
 
 EARTH_RADIUS = 6378.137  # km
 # BASE_ORBITAL_SPEED_FACTOR = 0.001 # Reduced speed factor
