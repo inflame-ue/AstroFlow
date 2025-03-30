@@ -61,8 +61,8 @@ function processSimulationResults(fetchedData) {
                     // Assuming format [time, x, y]
                     const time = parseFloat(point[0]);
                     // Scale x and y if they're in kilometers
-                    const x = parseFloat(point[1]) * KM_TO_PIXEL_SCALE;
-                    const y = parseFloat(point[2]) * KM_TO_PIXEL_SCALE;
+                    const x = parseFloat(point[1]) * KM_TO_PIXEL_SCALE * 1.025;
+                    const y = parseFloat(point[2]) * KM_TO_PIXEL_SCALE * 1.025;
                     
                     if (isNaN(time) || isNaN(x) || isNaN(y)) {
                         throw new Error(`Invalid trajectory point values: ${point}`);
