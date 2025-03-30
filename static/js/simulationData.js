@@ -22,6 +22,32 @@ async function fetchSimulationData() {
     }
 }
 
+async function fetchSimulationResults() {
+    try {
+        const response = await fetch('/api/simulation_results');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const fetchedData = await response.json();
+        console.log("Fetched Simulation Results", fetchedData);
+        return fetchedData;
+    } catch (error) {
+        console.error("Could not fetch simulation results:", error);
+        return null; // Return null or default data on error
+    }
+}
+
+function processSimulationResults(fetchedData) {
+    if (!fetchedData) {
+        console.log("No simulation results to process.");
+        return;
+    }
+
+    // Process fetched data as needed
+    // This is a placeholder for actual processing logic
+    console.log("Processing Simulation Results:", fetchedData);
+}
+
 // Function to process fetched data (calculate scaled radii, etc.)
 function processSimulationData(fetchedData) {
     if (!fetchedData) {
@@ -52,9 +78,20 @@ function processSimulationData(fetchedData) {
     console.log("Processed Scaled Orbit Radii (px):", orbitRadiiScaled);
 }
 
+// Function to load and process simulation data
+export async function loadAndProcessSumulationResults() {
+    const results = await fetchSimulationResults();
+    if (results) {
+        processSimulationResults(results);
+    }
+}
+
 // Function combining fetch and process
 export async function loadAndProcessSimulationData() {
     const data = await fetchSimulationData();
+    const results = await fetchSimulationResults();
+    if (results) {
+    }
     processSimulationData(data);
     // Return the processed data structure if needed, though it's also global
     return { simData, orbitRadiiScaled };

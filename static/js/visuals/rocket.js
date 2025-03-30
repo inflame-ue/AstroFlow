@@ -2,13 +2,13 @@
 
 import { app } from '../pixiApp.js';
 import { ROCKET_IMG_URL } from '../assets.js';
-import { getOrbitRadiiScaled } from '../simulationData.js';
+import { getOrbitRadiiScaled, loadAndProcessSumulationResults } from '../simulationData.js';
 import { getFuelStations } from './fuelStations.js';
 import { createFlameContainer, addFlameParticle } from './flame.js';
 import { createCapsulesContainer, deployCapsule, resetCapsules } from './capsules.js';
 
 let rocketSprite = null;
-let rocketPath = []; // Array for rocket path coordinates {x, y}
+let rocketPath = loadAndProcessSumulationResults(); // Array for rocket path coordinates {x, y}
 let currentPathIndex = 0;
 
 // Function to calculate the path dynamically [station -> orbit]
