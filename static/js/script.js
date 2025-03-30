@@ -164,7 +164,6 @@ function createFallbackVisualization() {
     initMobileControls(); // Enable mobile controls
 }
 
-
 // --- Run Initialization ---
 // Ensure DOM is ready before trying to access elements like canvas-container
 if (document.readyState === 'loading') {
