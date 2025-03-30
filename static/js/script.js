@@ -21,6 +21,8 @@ let rocket; // Declare rocket variable
 let rocketPath = []; // Array for rocket path coordinates {x, y}
 let currentPathIndex = 0;
 const rocketSpeed = 2; // Pixels per frame, adjust as needed
+let flameTrailContainer; // Container for flame trail particles
+const flameParticles = []; // Array to track flame particles
 
 // Scale factor: 97.84 kilometers per pixel
 const KM_TO_PIXEL_SCALE = 1 / 43.05;
@@ -227,6 +229,14 @@ function createVisualization(textures) { // Remove formData parameter
     if (rocket) {
         rocket.destroy();
     }
+    
+    // Create flame trail container
+    if (flameTrailContainer) {
+        flameTrailContainer.destroy();
+    }
+    flameTrailContainer = new PIXI.Container();
+    app.stage.addChild(flameTrailContainer);
+    
     rocket = new PIXI.Sprite(textures[rocketImageUrl]);
     rocket.anchor.set(0.5); // Anchor at center
     rocket.scale.set(0.05); // Adjust scale as needed
@@ -305,7 +315,7 @@ app.ticker.add((delta) => {
     });
 
     // Animate Rocket
-    if (rocket && rocket.visible && rocketPath.length === 2 && currentPathIndex === 0) { // Only run if path is [start, end] and we are at the start (index 0)
+    if (rocket && rocket.visible && rocketPath.length === 2 && currentPathIndex === 0) {
         const targetPoint = rocketPath[1]; // Target the end point
         const dx = targetPoint.x - rocket.x;
         const dy = targetPoint.y - rocket.y;
@@ -325,8 +335,40 @@ app.ticker.add((delta) => {
             const angle = Math.atan2(dy, dx);
             rocket.x += Math.cos(angle) * moveDistance;
             rocket.y += Math.sin(angle) * moveDistance;
-            // Rotation is set initially and shouldn't need updating for a straight path
-            // If needed, uncomment: rocket.rotation = angle + Math.PI / 2; 
+            
+            // Create flame trail particles
+            if (Math.random() < 0.5) { // Only create particles sometimes for a varied effect
+                // Calculate position behind the rocket (opposite to movement direction)
+                const particleX = rocket.x - 3 - Math.cos(angle) * 10; // Offset by multiplied distance
+                const particleY = rocket.y + 5 - Math.sin(angle) * 10;
+                
+                // Create a particle
+                const particle = new PIXI.Graphics();
+                particle.beginFill(0xFFFFFF);
+                particle.drawCircle(0, 0, 1 + Math.random() * 2); // Small, varied size
+                particle.endFill();
+                particle.x = particleX;
+                particle.y = particleY;
+                particle.alpha = 0.8;
+                particle.lifespan = 20; // Frames until disappearing
+                
+                flameTrailContainer.addChild(particle);
+                flameParticles.push(particle);
+            }
+        }
+    }
+    
+    // Animate and clean up flame particles
+    for (let i = flameParticles.length - 1; i >= 0; i--) {
+        const particle = flameParticles[i];
+        particle.lifespan -= 1;
+        particle.alpha -= 0.04; // Fade out
+        
+        // Remove dead particles
+        if (particle.lifespan <= 0 || particle.alpha <= 0) {
+            flameTrailContainer.removeChild(particle);
+            particle.destroy();
+            flameParticles.splice(i, 1);
         }
     }
 });
