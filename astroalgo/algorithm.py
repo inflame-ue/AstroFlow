@@ -587,7 +587,7 @@ class SimulateMission:
         target_landing_angle %= (2 * np.pi)
 
         # Generate trajectory
-        steps = 50
+        steps = 100 # Increased steps for smoother curve
         reentry_trajectory_points = [] # Local list
 
         # Add starting point
@@ -596,22 +596,12 @@ class SimulateMission:
         reentry_trajectory_points.append((start_time, start_pos[0], start_pos[1]))
 
         # Estimate total reentry time (physical seconds)
-        estimated_reentry_duration = 600.0 # e.g., 10 minutes = 600 seconds
+        estimated_reentry_duration = 1200.0 # Reset duration (e.g., 20 minutes) - adjust if needed
 
-        # --- ANGLE LOGIC using physical angular speed ---
-        initial_orbital_speed = tanker.speed # Angular speed (rad/s) just before reentry
-        estimated_angle_travel = initial_orbital_speed * estimated_reentry_duration # rad
-
-        # Calculate the angle the tanker would reach if it just continued orbiting
-        naive_final_angle = (start_angle + estimated_angle_travel) % (2 * np.pi)
-
-        # Calculate the angular adjustment needed to hit the actual target landing angle
-        adjustment_angle = target_landing_angle - naive_final_angle
-        # Normalize the adjustment to the shortest path [-pi, pi]
-        adjustment_angle = (adjustment_angle + np.pi) % (2 * np.pi) - np.pi
-
-        # The total angle change during reentry combines natural travel and adjustment
-        total_delta_angle = estimated_angle_travel + adjustment_angle
+        # --- ANGLE LOGIC: Simple shortest path interpolation --- 
+        # Calculate the shortest angle difference between start and target
+        delta_angle = target_landing_angle - start_angle
+        delta_angle = (delta_angle + np.pi) % (2 * np.pi) - np.pi # Normalize to [-pi, pi]
         # --- END ANGLE LOGIC ---
 
 
@@ -620,8 +610,8 @@ class SimulateMission:
             # Interpolate radius from orbit to planet
             current_radius = start_radius - t * (start_radius - self.planet_radius)
 
-            # Interpolate angle using the total calculated delta angle
-            current_angle = (start_angle + t * total_delta_angle) % (2 * np.pi) # NEW interpolation
+            # Interpolate angle using the simple shortest path delta
+            current_angle = (start_angle + t * delta_angle) % (2 * np.pi) # Use normalized delta_angle
 
             x = current_radius * np.cos(current_angle)
             y = current_radius * np.sin(current_angle)
@@ -647,7 +637,8 @@ class SimulateMission:
 
         # Update tanker final position (landed)
         tanker.radius = self.planet_radius
-        tanker.angle = target_landing_angle
+        # Ensure final angle is exactly the target landing angle, overriding calculation drift
+        tanker.angle = target_landing_angle 
         tanker.speed = 0 # Landed
         tanker.active = False # Tanker mission ends on landing
 
@@ -918,32 +909,65 @@ class SimulateMission:
 
         print("\n=== Outbound Phase Complete ===")
 
+        # --- HIGHEST ORBIT WAIT & RECOVERY ---
+        if current_orbit_idx == len(self.orbits) - 1:
+            highest_orbit = self.orbits[current_orbit_idx]
+            # Find the shuttle just deployed in this orbit
+            highest_orbit_shuttle = None
+            for s in highest_orbit.shuttles:
+                if s in self.tanker.shuttles_deployed and s not in self.tanker.shuttles_recovered:
+                    highest_orbit_shuttle = s
+                    break
+
+            if highest_orbit_shuttle and abs(highest_orbit_shuttle.speed) > 1e-9:
+                print(f"\n--- Waiting in highest orbit ({self.orbit_index_to_string(current_orbit_idx)}) for shuttle rendezvous ---")
+                # Shuttle moves in opposite direction, rendezvous should be after half period
+                half_period_wait = np.pi / abs(highest_orbit_shuttle.speed) # Physical seconds
+                self.tanker.add_event(
+                    self.mission_clock,
+                    f"Waiting {half_period_wait:.2f}s in highest orbit for shuttle {highest_orbit_shuttle.id}"
+                )
+                wait_traj = self.wait_in_orbit(half_period_wait)
+                self.tanker_mission_trajectory.extend(wait_traj)
+
+                print(f"Attempting recovery of shuttle {highest_orbit_shuttle.id} in highest orbit...")
+                self.recover_shuttle(highest_orbit_shuttle)
+            elif highest_orbit_shuttle:
+                 print(f"Warning: Cannot calculate wait time for shuttle {highest_orbit_shuttle.id} in highest orbit (zero speed?). Skipping wait.")
+            else:
+                 print("Warning: Could not find shuttle deployed in the highest orbit to wait for.")
+
+        else:
+            print(f"Warning: Outbound phase ended unexpectedly before reaching the highest orbit (Index: {current_orbit_idx}). Skipping highest orbit wait.")
+
 
         # --- RETURN MISSION (RECOVERY PHASE) ---
-        print("\n=== Starting Return Phase ===")
+        print("\n=== Starting Return Phase (Descent and Recovery) ===")
         self.tanker.outbound = False
         self.tanker.add_event(
             self.mission_clock,
-            "Beginning return mission phase - recovering shuttles"
+            "Beginning return mission phase - descending and recovering shuttles"
         )
 
-        # Current orbit index is where the outbound phase ended
+        # Start descent from the current orbit (should be highest)
+        # The loop iterates while current_orbit_idx > 0, handling transfers to orbits [N-1 .. 1]
         while current_orbit_idx > 0:
-            print(f"\nPlanning return transfer from orbit {self.orbit_index_to_string(current_orbit_idx)}...")
+            print(f"\nPlanning return transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to orbit {self.orbit_index_to_string(current_orbit_idx - 1)}...")
 
             # Find next shuttle to recover in the next lower orbit
             next_shuttle, transfer, wait_time = self.find_next_shuttle_target(current_orbit_idx)
 
             if next_shuttle and transfer:
+                # --- Perform Wait, Transfer, Recover sequence ---
                 print(f"  Targeting shuttle {next_shuttle.id} in orbit {self.orbit_index_to_string(current_orbit_idx - 1)}")
-                print(f"  Calculated optimal wait time: {wait_time:.2f}")
+                print(f"  Calculated optimal wait time in current orbit: {wait_time:.2f}s")
 
-                # Wait in current orbit if needed
+                # 1. Wait in current (higher) orbit if needed
                 if wait_time > 1e-3:
                     wait_traj = self.wait_in_orbit(wait_time)
                     self.tanker_mission_trajectory.extend(wait_traj)
 
-                # Execute Hohmann transfer (inward)
+                # 2. Execute Hohmann transfer (inward)
                 self.tanker.add_event(
                     self.mission_clock,
                     f"Beginning transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to recover shuttle in orbit {self.orbit_index_to_string(current_orbit_idx - 1)}"
@@ -951,44 +975,66 @@ class SimulateMission:
                 transfer_traj = self.execute_hohmann_transfer(transfer)
                 self.tanker_mission_trajectory.extend(transfer_traj)
 
-                # Update current orbit index AFTER successful transfer
+                # 3. Update current orbit index AFTER successful transfer
                 current_orbit_idx -= 1
                 print(f"  Completed transfer. Now in orbit {self.orbit_index_to_string(current_orbit_idx)}.")
 
-                 # Check if transfer was successful (check tanker radius)
+                 # 4. Verify transfer success (check tanker radius)
                 if self.find_current_orbit_index() != current_orbit_idx:
-                     print(f"Error: Return transfer failed to reach orbit index {current_orbit_idx}. Current index: {self.find_current_orbit_index()}")
+                     print(f"Error: Return transfer failed to reach target orbit index {current_orbit_idx}. Current index: {self.find_current_orbit_index()}")
+                     # Attempt to force state
                      self.tanker.radius = self.orbits[current_orbit_idx].radius
                      self.tanker.speed = (np.sqrt(MU / self.tanker.radius) / self.tanker.radius) if self.tanker.radius > 0 else 0
                      print(f"  Forcing tanker state to orbit {current_orbit_idx}.")
                      forced_pos = self.tanker.position()
                      self.tanker_mission_trajectory.append((self.mission_clock, forced_pos[0], forced_pos[1]))
+                     # Continue cautiously
 
+                # 5. Calculate remaining intercept time in the target orbit
+                print(f"Calculating final intercept wait time in orbit {self.orbit_index_to_string(current_orbit_idx)} for {next_shuttle.id}...")
+                intercept_wait_time = self.calculate_intercept_time(self.tanker, next_shuttle)
 
-                # Recover the targeted shuttle (should be close now)
-                self.recover_shuttle(next_shuttle)
+                if intercept_wait_time == float('inf'):
+                     print(f"Warning: Cannot intercept shuttle {next_shuttle.id} after transfer (relative speed issue?). Skipping recovery.")
+                elif intercept_wait_time > 1e-3:
+                     print(f"  Waiting additional {intercept_wait_time:.2f}s for final rendezvous...")
+                     self.tanker.add_event(
+                         self.mission_clock,
+                         f"Final rendezvous wait ({intercept_wait_time:.2f}s) in orbit {self.orbit_index_to_string(current_orbit_idx)} for {next_shuttle.id}"
+                     )
+                     wait_traj = self.wait_in_orbit(intercept_wait_time)
+                     self.tanker_mission_trajectory.extend(wait_traj)
+                     # 6. Recover the targeted shuttle after final wait
+                     print(f"Attempting recovery of shuttle {next_shuttle.id}...")
+                     self.recover_shuttle(next_shuttle)
+                else:
+                     # Intercept time is negligible, recover immediately
+                     print(f"Tanker aligned with shuttle {next_shuttle.id} after transfer. Attempting immediate recovery...")
+                     # 6. Recover the targeted shuttle immediately
+                     self.recover_shuttle(next_shuttle)
 
             else:
-                # No recoverable shuttle found in the next lower orbit, or transfer failed
-                print(f"  No optimal shuttle target found or transfer not possible to orbit {self.orbit_index_to_string(current_orbit_idx - 1)}.")
-                # Option: Just transfer down without recovery?
-                print(f"  Executing transfer to orbit {self.orbit_index_to_string(current_orbit_idx - 1)} without shuttle recovery.")
+                # --- No specific shuttle target found / Transfer failed ---
+                # Option: Just transfer down without recovery? Or stop?
+                # Current behaviour: Try to transfer down anyway.
+                print(f"  No optimal shuttle target found or transfer calculation failed for orbit {self.orbit_index_to_string(current_orbit_idx - 1)}.")
+                print(f"  Attempting transfer to orbit {self.orbit_index_to_string(current_orbit_idx - 1)} without specific rendezvous.")
 
                 # Calculate transfer to the next lower orbit directly
                 target_lower_orbit = self.orbits[current_orbit_idx - 1]
                 # Check for valid transfer
                 if abs(self.tanker.radius - target_lower_orbit.radius) < 1e-3:
-                     print(f"  Warning: Cannot transfer to identical radius orbit {target_lower_orbit.radius}. Stopping return.")
+                     print(f"  Error: Cannot transfer to identical radius orbit {target_lower_orbit.radius}. Stopping return.")
                      break # Stop return if cannot transfer down
 
                 transfer_down = HohmannTransfer(self.tanker.radius, target_lower_orbit.radius)
                 if transfer_down.transfer_time < 1e-9:
-                     print(f"  Warning: Zero transfer time calculated for downward transfer. Stopping return.")
+                     print(f"  Error: Zero transfer time calculated for downward transfer. Stopping return.")
                      break
 
                 self.tanker.add_event(
                      self.mission_clock,
-                     f"Beginning transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to orbit {self.orbit_index_to_string(current_orbit_idx - 1)} (no target)"
+                     f"Beginning transfer from orbit {self.orbit_index_to_string(current_orbit_idx)} to orbit {self.orbit_index_to_string(current_orbit_idx - 1)} (no target recovery)"
                 )
                 transfer_traj = self.execute_hohmann_transfer(transfer_down)
                 self.tanker_mission_trajectory.extend(transfer_traj)
@@ -1005,21 +1051,107 @@ class SimulateMission:
                      print(f"  Forcing tanker state to orbit {current_orbit_idx}.")
                      forced_pos = self.tanker.position()
                      self.tanker_mission_trajectory.append((self.mission_clock, forced_pos[0], forced_pos[1]))
+                 # Note: No shuttle recovery attempted here as no target was identified.
+
+        print("\n=== Descent Loop Complete ===")
 
 
-        print("\n=== Return Phase Complete ===")
+        # --- LOWEST ORBIT RECOVERY ---
+        # After the loop, tanker should be in the lowest orbit (index 0)
+        reentry_phasing_complete = False # Flag to indicate if phasing wait is done
+        if current_orbit_idx == 0:
+             lowest_orbit = self.orbits[0]
+             lowest_orbit_shuttle = None
+             for s in lowest_orbit.shuttles:
+                 # Find the shuttle belonging to this orbit that was deployed and not yet recovered
+                 if s in self.tanker.shuttles_deployed and s not in self.tanker.shuttles_recovered:
+                     lowest_orbit_shuttle = s
+                     break
+
+             if lowest_orbit_shuttle:
+                 print(f"\n--- Waiting in lowest orbit ({self.orbit_index_to_string(0)}) for final shuttle rendezvous ---")
+                 # Calculate wait time for intercept in the *same* orbit
+                 wait_time_low = self.calculate_intercept_time(self.tanker, lowest_orbit_shuttle)
+
+                 if wait_time_low == float('inf'):
+                     print(f"Warning: Cannot intercept shuttle {lowest_orbit_shuttle.id} in lowest orbit (relative speed issue?). Skipping recovery.")
+                 elif wait_time_low > 1e-3:
+                     self.tanker.add_event(
+                         self.mission_clock,
+                         f"Waiting {wait_time_low:.2f}s in lowest orbit for shuttle {lowest_orbit_shuttle.id}"
+                     )
+                     wait_traj = self.wait_in_orbit(wait_time_low)
+                     self.tanker_mission_trajectory.extend(wait_traj)
+                     print(f"Attempting recovery of shuttle {lowest_orbit_shuttle.id} in lowest orbit...")
+                     self.recover_shuttle(lowest_orbit_shuttle)
+
+                 # --- Pre-Reentry Phasing Wait (if shuttle was recovered) ---
+                 if lowest_orbit_shuttle in self.tanker.shuttles_recovered:
+                     print(f"\n--- Calculating pre-reentry phasing wait in orbit {self.orbit_index_to_string(0)} ---")
+                     # Target landing angle
+                     target_landing_angle = self.initial_launch_angle if self.initial_launch_angle is not None else 0.0
+                     # Estimate angular travel during reentry itself (using average speed needed)
+                     estimated_reentry_duration = 1200.0 # Match duration used in simulate_reentry
+                     shortest_delta_angle_reentry = target_landing_angle - self.tanker.angle # Angle from current pos to landing
+                     shortest_delta_angle_reentry = (shortest_delta_angle_reentry + np.pi) % (2 * np.pi) - np.pi
+                     # Target average angular velocity during reentry
+                     target_avg_reentry_vel = shortest_delta_angle_reentry / estimated_reentry_duration if estimated_reentry_duration > 1e-6 else 0.0
+                     # Heuristic: Start reentry when landing site is roughly angular_travel/2 'behind'
+                     # A simpler heuristic: Start reentry when tanker angle is PI radians away from target landing angle?
+                     # Let's try aiming to start when tanker is PI/2 radians *behind* target landing angle (target is ahead)
+                     target_reentry_start_angle = (target_landing_angle - np.pi/2) % (2 * np.pi)
+
+                     # Calculate wait time needed to drift to this start angle
+                     angle_to_drift = (target_reentry_start_angle - self.tanker.angle) % (2*np.pi)
+                     wait_time_phasing = angle_to_drift / self.tanker.speed if abs(self.tanker.speed) > 1e-9 else float('inf')
+
+                     # Ensure wait time is positive
+                     if wait_time_phasing < -1e-9:
+                         orbit_period_phys = (2* np.pi) / abs(self.tanker.speed) if abs(self.tanker.speed) > 1e-9 else float('inf')
+                         if orbit_period_phys != float('inf'):
+                             wait_time_phasing += orbit_period_phys
+                         else:
+                             wait_time_phasing = float('inf') # Cannot phase if speed is zero
+
+                     wait_time_phasing = max(0, wait_time_phasing) # Ensure non-negative
+
+                     if wait_time_phasing == float('inf') or wait_time_phasing > 86400: # Limit wait to 1 day
+                         print(f"Warning: Cannot calculate pre-reentry phase wait or wait time is excessive ({wait_time_phasing:.2f}s). Proceeding directly to reentry.")
+                     elif wait_time_phasing > 1e-3:
+                         print(f"Waiting {wait_time_phasing:.2f}s for reentry phasing...")
+                         self.tanker.add_event(
+                             self.mission_clock,
+                             f"Waiting {wait_time_phasing:.2f}s in lowest orbit for reentry phasing to angle {target_reentry_start_angle:.2f} rad"
+                         )
+                         wait_traj = self.wait_in_orbit(wait_time_phasing)
+                         self.tanker_mission_trajectory.extend(wait_traj)
+                         reentry_phasing_complete = True # Mark phasing as done
+                     else:
+                         print("Tanker already phased for reentry. Proceeding directly.")
+                         reentry_phasing_complete = True # Mark phasing as done (no wait needed)
+                 else:
+                     print("Skipping reentry phasing wait as lowest orbit shuttle was not recovered.")
+
+             else:
+                 print("Warning: Could not find the deployed shuttle in the lowest orbit to recover.")
+        else:
+             print(f"Warning: Tanker not in lowest orbit (index {current_orbit_idx}) after descent loop. Skipping lowest orbit recovery.")
+
 
         # --- Final Reentry Phase ---
-        if current_orbit_idx == 0: # Ensure we are in the lowest orbit before reentry
-            print(f"\n=== Starting Reentry Phase from orbit {self.orbit_index_to_string(current_orbit_idx)} ===")
+        # Check if tanker is actually in the lowest orbit before re-entering
+        if self.find_current_orbit_index() == 0:
+            print(f"\n=== Starting Reentry Phase from orbit {self.orbit_index_to_string(0)} ===")
+            # Use the initially stored launch pad angle for landing target
+            target_landing_angle = self.initial_launch_angle if self.initial_launch_angle is not None else 0.0
             self.tanker.add_event(
                 self.mission_clock,
-                f"Beginning reentry procedure targeting landing angle {self.initial_launch_angle:.2f} rad"
+                f"Beginning reentry procedure targeting landing angle {target_landing_angle:.2f} rad"
             )
-            reentry_traj = self.simulate_reentry(self.tanker, self.initial_launch_angle)
+            reentry_traj = self.simulate_reentry(self.tanker, target_landing_angle)
             self.tanker_mission_trajectory.extend(reentry_traj)
         else:
-            print(f"\nError: Tanker not in lowest orbit (index {current_orbit_idx}) at end of return phase. Cannot perform reentry.")
+            print(f"\nError: Tanker not in lowest orbit (index {self.find_current_orbit_index()}) at end of return phase. Cannot perform reentry.")
 
 
         # --- Mission Summary ---
