@@ -4,21 +4,8 @@ from utils.parser import normalize_form_data
 import json
 import os
 import numpy as np # needed for deg2rad
+from astroalgo.algorithm import SimulateMission, Tanker, LaunchPad, Orbit, Satellite, EARTH_RADIUS
 
-
-try:
-    from astroalgo.algorithm import SimulateMission, Tanker, LaunchPad, Orbit, Satellite, EARTH_RADIUS
-    ASTROALGO_AVAILABLE = True
-except ImportError as e:
-    print(f"WARNING: Could not import astroalgo. Simulation will not run. Error: {e}")
-    ASTROALGO_AVAILABLE = False
-    # define dummy classes if import fails, so the rest of the Flask app doesn't crash
-    class SimulateMission: pass
-    class Tanker: pass
-    class LaunchPad: pass
-    class Orbit: pass
-    class Satellite: pass
-    EARTH_RADIUS = 6378.137
 
 load_dotenv()
 app = Flask(__name__)
@@ -68,8 +55,7 @@ def simulation():
     simulation_results = None # initialize results variable
     sim_error_message = None # specific error during simulation run
 
-    print(f"ASTROALGO_AVAILABLE: {ASTROALGO_AVAILABLE}")
-    if form_data and ASTROALGO_AVAILABLE:
+    if form_data:
         print("Attempting to initialize and run simulation...")
         try:
             # tanker starts at Earth radius, angle will be set by launchpad choice
@@ -124,14 +110,7 @@ def simulation():
             print("Simulation sequence complete.")
 
             # limit trajectory size for session storage if necessary
-            max_traj_points = 5000
             trajectory_data = sim.tanker_mission_trajectory
-            if len(trajectory_data) > max_traj_points:
-                 # sample the trajectory to reduce size
-                 step = len(trajectory_data) // max_traj_points
-                 trajectory_data = trajectory_data[::step]
-
-
             simulation_results = {
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
@@ -140,6 +119,9 @@ def simulation():
             # write simulation results to file
             with open('simulation_results.json', 'w') as f:
                 json.dump(simulation_results, f)
+
+            # Log the mission events to events.log
+            log_events(sim.tanker.mission_events)
 
         except ValueError as ve: # catch specific configuration errors
              sim_error_message = f"Simulation setup error: {ve}"
@@ -151,9 +133,6 @@ def simulation():
              print(sim_error_message)
              status = 'error'
              message = sim_error_message
-    elif not ASTROALGO_AVAILABLE:
-        status = 'error'
-        message = 'Simulation algorithm module (astroalgo) could not be loaded.'
     elif not form_data:
          status = 'warning'
          message = 'No configuration data loaded. Please submit the form first.'
@@ -166,6 +145,27 @@ def simulation():
                            simulation_results=simulation_results # pass simulation output
                            )
 
+def log_events(events):
+    # check if events is empty
+    if not events:
+        print("No events to log.")
+        return
+    
+    # include try-except block to handle potential errors
+    try:
+        # Open events.log in append mode to preserve previous logs
+        with open('events.log', 'a') as f:
+            # Write a header with a timestamp for this simulation run
+            from datetime import datetime
+            f.write(f"\nSimulation run at {datetime.now().isoformat()}:\n")
+            # Dump all events as a formatted string
+            for time, description in events:
+                f.write(f"Time: {time}, Event: {description}\n")
+    except OSError as e:
+        print(f"Error while working with events.log: {e}")
+    except Exception as e:
+        print(f"Error logging events: {e}")
+    # Note that this function does not log in real-time; it dumps events post-simulation
 
 # Error Handling Endpoints
 @app.errorhandler(400)
@@ -180,6 +180,9 @@ def not_found(e):
 def internal_server_error(e):
     return render_template('500.html'), 500
 
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('403.html'), 403
 
 # API endpoints
 
