@@ -176,7 +176,6 @@ def simulation():
                            simulation_results=simulation_results # pass simulation output
                            )
 
-
 # Error Handling Endpoints
 @app.errorhandler(400)
 def bad_request(e):
@@ -193,7 +192,6 @@ def not_found(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     return render_template('500.html'), 500
-
 
 # API endpoints
 
