@@ -9,37 +9,39 @@ import logging
 from datetime import datetime
 
 
-load_dotenv()
-app = Flask(__name__)
-# secret key for session
-app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
-
-def log_events(events):
+def log_events(events, filename='events.log'):
     """
-    Log mission events to events.log file
+    Log simulation events to a file.
     
     Parameters:
     -----------
     events : list
-        List of (time, description) tuples representing mission events
+        List of (time, description) tuples representing simulation events
+    filename : str, optional
+        Path to the log file, defaults to 'events.log'
         
-    This function creates a timestamped log entry for each mission event
-    and writes them to events.log. The log includes both the simulation
-    time and the event description.
+    Notes:
+    ------
+    This function appends events to the specified log file with timestamps.
+    It does not perform real-time logging but writes all events at once
+    after the simulation completes.
     """
-    logging.basicConfig(
-        filename='events.log',
-        level=logging.INFO,
-        format='%(asctime)s - %(message)s'
-    )
+    if not events:
+        return
     
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    logging.info(f"=== Mission Events Log - {timestamp} ===")
     
-    for event_time, description in events:
-        logging.info(f"T+{event_time:.2f}s: {description}")
-    
-    logging.info("=== End of Mission Events ===\n")
+    with open(filename, 'a') as log_file:
+        log_file.write(f"\n--- Simulation run at {timestamp} ---\n")
+        for event_time, description in events:
+            log_file.write(f"T+{event_time:.2f}s: {description}\n")
+        log_file.write("--- End of simulation events ---\n")
+
+
+load_dotenv()
+app = Flask(__name__)
+# secret key for session
+app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -144,8 +146,8 @@ def simulation():
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
             }
-
-            # Log mission events to file
+            
+            # Log simulation events
             log_events(sim.tanker.mission_events)
 
             # write simulation results to file
