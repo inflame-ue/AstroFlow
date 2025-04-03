@@ -150,9 +150,9 @@ export function animateCapsules(delta) {
         capsule.y = centerY + capsule.orbitRadius * Math.sin(capsule.angle);
         // Optional: rotate capsule to face direction of travel?
         // capsule.rotation = capsule.angle + Math.PI / 2;
-    };
+    });
 }
-}
+
 export function resetCapsules() {
      deployedOrbits.clear();
      capsules.forEach(c => c.destroy());
