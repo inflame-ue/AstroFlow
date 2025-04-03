@@ -4,26 +4,42 @@ from utils.parser import normalize_form_data
 import json
 import os
 import numpy as np # needed for deg2rad
+from astroalgo.algorithm import SimulateMission, Tanker, LaunchPad, Orbit, Satellite, EARTH_RADIUS
+import logging
+from datetime import datetime
 
-
-try:
-    from astroalgo.algorithm import SimulateMission, Tanker, LaunchPad, Orbit, Satellite, EARTH_RADIUS
-    ASTROALGO_AVAILABLE = True
-except ImportError as e:
-    print(f"WARNING: Could not import astroalgo. Simulation will not run. Error: {e}")
-    ASTROALGO_AVAILABLE = False
-    # define dummy classes if import fails, so the rest of the Flask app doesn't crash
-    class SimulateMission: pass
-    class Tanker: pass
-    class LaunchPad: pass
-    class Orbit: pass
-    class Satellite: pass
-    EARTH_RADIUS = 6378.137
 
 load_dotenv()
 app = Flask(__name__)
 # secret key for session
 app.secret_key = os.environ.get("SECRET_KEY")  # without it the app will not work
+
+def log_events(events):
+    """
+    Log mission events to events.log file
+    
+    Parameters:
+    -----------
+    events : list
+        List of (time, description) tuples representing mission events
+        
+    This function creates a timestamped log entry for each mission event
+    and writes them to events.log. The log includes both the simulation
+    time and the event description.
+    """
+    logging.basicConfig(
+        filename='events.log',
+        level=logging.INFO,
+        format='%(asctime)s - %(message)s'
+    )
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logging.info(f"=== Mission Events Log - {timestamp} ===")
+    
+    for event_time, description in events:
+        logging.info(f"T+{event_time:.2f}s: {description}")
+    
+    logging.info("=== End of Mission Events ===\n")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -68,8 +84,7 @@ def simulation():
     simulation_results = None # initialize results variable
     sim_error_message = None # specific error during simulation run
 
-    print(f"ASTROALGO_AVAILABLE: {ASTROALGO_AVAILABLE}")
-    if form_data and ASTROALGO_AVAILABLE:
+    if form_data:
         print("Attempting to initialize and run simulation...")
         try:
             # tanker starts at Earth radius, angle will be set by launchpad choice
@@ -124,18 +139,14 @@ def simulation():
             print("Simulation sequence complete.")
 
             # limit trajectory size for session storage if necessary
-            max_traj_points = 5000
             trajectory_data = sim.tanker_mission_trajectory
-            if len(trajectory_data) > max_traj_points:
-                 # sample the trajectory to reduce size
-                 step = len(trajectory_data) // max_traj_points
-                 trajectory_data = trajectory_data[::step]
-
-
             simulation_results = {
                 "trajectory": trajectory_data, # List of (time, x, y) tuples
                 "events": sim.tanker.mission_events # List of (time, description) tuples
             }
+
+            # Log mission events to file
+            log_events(sim.tanker.mission_events)
 
             # write simulation results to file
             with open('simulation_results.json', 'w') as f:
@@ -151,9 +162,6 @@ def simulation():
              print(sim_error_message)
              status = 'error'
              message = sim_error_message
-    elif not ASTROALGO_AVAILABLE:
-        status = 'error'
-        message = 'Simulation algorithm module (astroalgo) could not be loaded.'
     elif not form_data:
          status = 'warning'
          message = 'No configuration data loaded. Please submit the form first.'
@@ -171,6 +179,10 @@ def simulation():
 @app.errorhandler(400)
 def bad_request(e):
     return render_template('400.html'), 400
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('403.html'), 403
 
 @app.errorhandler(404)
 def not_found(e):
